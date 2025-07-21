@@ -12,11 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-import environ
-env = environ.Env()
-environ.Env.read_env()
+import dj_database_url
 
-from django.conf.global_settings import EMAIL_USE_SSL
 from dotenv import load_dotenv
 from datetime import timedelta
 
@@ -95,14 +92,15 @@ DATABASES = {
     #     'ENGINE': 'django.db.backends.sqlite3',
     #     'NAME': BASE_DIR / 'db.sqlite3',
     # }
-    'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'it360_db'),
-        'USER': os.getenv('DB_USER', 'it360_admin'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
-        'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
-        'PORT': os.getenv('DB_PORT', '5432'),
-    }
+    # 'default': {
+    #     'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+    #     'NAME': os.getenv('DB_NAME', 'it360_db'),
+    #     'USER': os.getenv('DB_USER', 'it360_admin'),
+    #     'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
+    #     'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
+    #     'PORT': os.getenv('DB_PORT', '5432'),
+    # }
+    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
 }
 
 
