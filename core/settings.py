@@ -34,13 +34,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY') if os.getenv('SECRET_KEY') else 'your-default-secret-key'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = os.getenv('DEBUG') if os.getenv('DEBUG') == 'True' else False
-#
-# ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS').split(',') if os.getenv('DJANGO_ALLOWED_HOSTS') else []
+DEBUG = os.getenv('DEBUG') if os.getenv('DEBUG') == 'True' else False
 
-ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['localhost'])
-DEBUG = env.bool('DEBUG', default=False)
-
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS').split(',') if os.getenv('DJANGO_ALLOWED_HOSTS') else []
 
 # Application definition
 
@@ -50,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
@@ -58,6 +55,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -97,15 +95,14 @@ DATABASES = {
     #     'ENGINE': 'django.db.backends.sqlite3',
     #     'NAME': BASE_DIR / 'db.sqlite3',
     # }
-    # 'default': {
-    #     'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-    #     'NAME': os.getenv('DB_NAME', 'it360_db'),
-    #     'USER': os.getenv('DB_USER', 'it360_admin'),
-    #     'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
-    #     'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
-    #     'PORT': os.getenv('DB_PORT', '5432'),
-    # }
-    'default': env.db('DATABASE_URL')
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'it360_db'),
+        'USER': os.getenv('DB_USER', 'it360_admin'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
+        'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
+        'PORT': os.getenv('DB_PORT', '5432'),
+    }
 }
 
 
