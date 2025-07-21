@@ -1,0 +1,31 @@
+### Django template
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media
+.idea/
+*env
+
+
+# If your build process includes running collectstatic, then you probably don't need or want to include staticfiles/
+# in your Git repository. Update and uncomment the following line accordingly.
+# <django-project-name>/staticfiles/
+# If you are using Docker, you might want to ignore the following files:
+# Docker-related files
+docker-compose.override.yml
+# Dockerfile
+Dockerfile
+# Docker Compose files
+/docker-compose.yml
+.dockerignore
+docker-compose.*.yml
+*.env
+*.bak
+*.tmp
+docker-data/
+volumes/
+*.pid
