@@ -15,7 +15,8 @@ from rest_framework.fields import empty
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, Student, Sponsor, Admin, Instructor, OTP
+from .models import (User, Student, Sponsor, Admin,
+                     Instructor, Certification, OTP)
 from .utils import get_tokens_for_user, convert_to_base64, send_otp_email
 
 # Load environment variables from .env file
@@ -336,15 +337,24 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Upload an image file."
     )
+    # user = serializers.PrimaryKeyRelatedField(read_only=True)
+    linked_sponsor = serializers.PrimaryKeyRelatedField(
+        queryset=Sponsor.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Sponsor linked to the student profile."
+    )
+    user_details = UserSerializer(source='user', read_only=True)
 
     class Meta:
         model = Student
-        fields = ['id', 'user', 'gender', 'date_of_birth', 'phone_number', 'nationality',
+        fields = ['id', 'gender', 'date_of_birth', 'phone_number', 'nationality',
                   'current_school', 'current_grade', 'location', 'profile_picture_media',
-                  'linked_sponsor']
-        read_only_fields = ['id', 'user', 'profile_picture']
+                  'linked_sponsor', 'user_details']
+        read_only_fields = ['id', 'user', 'user_details', 'profile_picture']
         extra_kwargs = {
             'linked_sponsor': {'required': False, 'allow_null': True},
+            'user_details': {'read_only': True},
             'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
         }
 
@@ -367,3 +377,222 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         validated_data.pop('profile_picture_media')
         student = Student.objects.create(user=user, **validated_data)
         return student
+
+
+class SponsorProfileSerializer(serializers.ModelSerializer):
+    profile_picture_media = serializers.ImageField(
+        allow_empty_file=True,
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        help_text="User associated with the sponsor profile."
+    )
+    user_details = UserSerializer(source='user', read_only=True)
+
+    class Meta:
+        model = Sponsor
+        fields = ['id', 'user', 'gender', 'phone_number', 'address', 'profile_picture_media', 'user_details']
+        read_only_fields = ['id', 'user', 'profile_picture']
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media)
+
+        if not self.instance and not attrs.get('user'):
+            raise serializers.ValidationError("User is required to create a sponsor profile.")
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data.pop('user')
+        validated_data.pop('profile_picture_media')
+        sponsor = Sponsor.objects.create(user=user, **validated_data)
+        return sponsor
+
+
+class CertificationSerializer(serializers.ModelSerializer):
+    instructor = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+    )
+
+    class Meta:
+        model = Certification
+        fields = ['id', 'name', 'issuer', 'instructor', 'date_awarded', 'expires_at']
+
+
+class InstructorProfileSerializer(serializers.ModelSerializer):
+    profile_picture_media = serializers.ImageField(
+        allow_empty_file=True,
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        help_text="User associated with the instructor profile."
+    )
+    user_details = UserSerializer(source='user', read_only=True)
+    certifications = CertificationSerializer(many=True, required=False, allow_null=True, allow_empty=True)
+
+    class Meta:
+        model = Instructor
+        fields = ['id', 'user', 'phone_number', 'address', 'profile_picture_media', 'user_details',
+                  'certifications']
+        read_only_fields = ['id', 'user', 'profile_picture']
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media)
+
+        if not self.instance and not attrs.get('user'):
+            raise serializers.ValidationError("User is required to create an instructor profile.")
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data.pop('user')
+        validated_data.pop('profile_picture_media')
+        certifications_data = validated_data.pop('certifications', [])
+        instructor = Instructor.objects.create(user=user, **validated_data)
+        if len(certifications_data) > 0:
+            Certification.objects.bulk_create([
+                Certification(instructor=instructor, **cert_data) for cert_data in certifications_data
+            ])
+        return instructor
+
+    def update(self, instance, validated_data):
+        certifications_data = validated_data.pop('certifications', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if certifications_data is not None:
+            # update certifications by deleting those not in the sent data (PUT)
+            # existing_certifications = [cert.id for cert in instance.certifications.all()]
+            # sent_certifications = [cert['id'] for cert in certifications_data if 'id' in cert]
+            # # Delete certifications that are not in the sent data
+            # for cert_id in set(existing_certifications) - set(sent_certifications):
+            #     instance.certifications.filter(id=cert_id).delete()
+
+            # Works well for PATCH requests
+            for cert in certifications_data:
+                if 'id' in cert:
+                    # Update existing certification
+                    certification = instance.certifications.get(id=cert['id'])
+                    for key, value in cert.items():
+                        setattr(certification, key, value)
+                    certification.save()
+                else:
+                    # Create new certification
+                    Certification.objects.create(instructor=instance, **cert)
+        return instance
+
+
+# GET Serializer
+class AdminProfileRetrieveSerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source='user', read_only=True)
+
+    class Meta:
+        model = Admin
+        fields = "__all__"
+        read_only_fields = ['id', 'user', 'profile_picture', 'user_details']
+
+# POST Serializer (Create)
+class AdminProfileCreateSerializer(serializers.ModelSerializer):
+    profile_picture_media = serializers.ImageField(
+        allow_empty_file=True,
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        help_text="User associated with the admin profile."
+    )
+
+    class Meta:
+        model = Admin
+        exclude = ['profile_picture']
+        extra_kwargs = {
+            'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
+        }
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media)
+            attrs.pop('profile_picture_media', None)
+        if not attrs.get('user'):
+            raise serializers.ValidationError("User is required to create an admin profile.")
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data.pop('user')
+        validated_data.pop('profile_picture_media', None)
+        admin = Admin.objects.create(user=user, **validated_data)
+        return admin
+
+# PUT/PATCH Serializer (Update)
+class AdminProfileUpdateSerializer(serializers.ModelSerializer):
+    profile_picture_media = serializers.ImageField(
+        allow_empty_file=True,
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
+
+    class Meta:
+        model = Admin
+        exclude = ['profile_picture', 'user']
+        extra_kwargs = {
+            'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
+        }
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media)
+            attrs.pop('profile_picture_media', None)
+        return attrs
+
+    def update(self, instance, validated_data):
+        validated_data.pop('profile_picture_media', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+# DELETE Serializer (Optional, usually not needed, but for completeness)
+class AdminProfileDeleteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Admin
+        fields = ['id']

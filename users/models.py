@@ -9,6 +9,8 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.core.validators import RegexValidator
 
+from shared.models import GenericBaseModel
+
 # Create your models here.
 
 class UserManager(BaseUserManager):
@@ -227,10 +229,29 @@ class Instructor(models.Model):
     )
     phone_number = models.CharField(max_length=15, blank=True, null=True, help_text="Phone number of the instructor.")
     address = models.TextField(blank=True, null=True, help_text="Address of the instructor.")
+    bio = models.TextField(blank=True, null=True, help_text="Short biography of the instructor.")
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the instructor.")
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name} ({self.user.user_ID})"
+    
+
+class Certification(models.Model):
+    instructor = models.ForeignKey(
+        'Instructor',
+        on_delete=models.CASCADE,
+        related_name='certifications'
+    )
+    name = models.CharField(max_length=255, help_text="Name of the certification.")
+    issuer = models.CharField(
+        max_length=255,
+        help_text="Issuer of the certification.",
+        blank=True,
+        null=True
+    )
+    date_awarded = models.DateField(null=True, blank=True)
+    expires_at = models.DateField(null=True, blank=True, help_text="Expiration date of the certification.")
+
 
 class Admin(models.Model):
     """

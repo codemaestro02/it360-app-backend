@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import viewsets, mixins, status, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -9,24 +10,265 @@ from drf_yasg import openapi
 from .serializers import (
     RegistrationSerializer, VerifyOTPSerializer, LoginSerializer,
     LogoutSerializer, ForgotPasswordSerializer, ResetPasswordSerializer,
-    ChangePasswordSerializer, StudentProfileSerializer, RegistrationLoginResponseSerializer, UserSerializer
+    ChangePasswordSerializer, RegistrationLoginResponseSerializer, UserSerializer,
 )
+
+# for Admin
+from .serializers import (AdminProfileRetrieveSerializer, AdminProfileUpdateSerializer,
+                          AdminProfileDeleteSerializer)
+
+import shared.permissions as app_permissions
 from .utils import get_tokens_for_user
 
 
-class StudentProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+# class StudentProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+#     """
+#     View for handling user profile operations.
+#     This view allows users to retrieve and update their profile information.
+#     """
+#     serializer_class = StudentProfileSerializer
+#     permission_classes = [app_permissions.IsStudent]
+#
+#     def get_object(self):
+#         """
+#         Retrieve the user profile of the currently authenticated student.
+#         :return:
+#         """
+#         user_id = self.request.user.id
+#         try:
+#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+#         except self.serializer_class.Meta.model.DoesNotExist:
+#             raise ValidationError({'detail': 'User profile not found.'})
+#
+#     def get_queryset(self):
+#         """
+#         Return the queryset for the user profile.
+#         This queryset is filtered to return only the authenticated user's profile.
+#         :return:
+#         """
+#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+#
+#     def update(self, request, *args, **kwargs):
+#         """
+#         Handle the update of the user profile.
+#         :param request:
+#         :param args:
+#         :param kwargs:
+#         :return:
+#         """
+#         partial = kwargs.pop('partial', False)
+#         instance = self.get_object()
+#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
+#         serializer.is_valid(raise_exception=True)
+#         self.perform_update(serializer)
+#
+#         return Response({
+#             'message': 'Profile updated successfully',
+#             'user': serializer.data
+#         }, status=status.HTTP_200_OK)
+#
+#
+# class SponsorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+#     """
+#     View for handling sponsor profile operations.
+#     This view allows sponsors to retrieve and update their profile information.
+#     """
+#     serializer_class = SponsorProfileSerializer  # Assuming the same serializer is used for sponsors
+#     permission_classes = [app_permissions.IsSponsor]
+#
+#     def get_object(self):
+#         """
+#         Retrieve the user profile of the currently authenticated sponsor.
+#         :return:
+#         """
+#         user_id = self.request.user.id
+#         try:
+#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+#         except self.serializer_class.Meta.model.DoesNotExist:
+#             raise ValidationError({'detail': 'User profile not found.'})
+#
+#     def get_queryset(self):
+#         """
+#         Return the queryset for the user profile.
+#         This queryset is filtered to return only the authenticated user's profile.
+#         :return:
+#         """
+#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+#
+#     def update(self, request, *args, **kwargs):
+#         """
+#         Handle the update of the sponsor profile.
+#         :param request:
+#         :param args:
+#         :param kwargs:
+#         :return:
+#         """
+#         partial = kwargs.pop('partial', False)
+#         instance = self.get_object()
+#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
+#         serializer.is_valid(raise_exception=True)
+#         self.perform_update(serializer)
+#
+#         return Response({
+#             'message': 'Profile updated successfully',
+#             'user': serializer.data
+#         }, status=status.HTTP_200_OK)
+#
+#     @action(detail=True, methods=['patch'], url_path='link-student')
+#     def link_student(self, request, pk=None):
+#         """
+#         Link a student to the sponsor's profile.
+#         :param request:
+#         :param pk: The primary key of the sponsor profile.
+#         :return:
+#         """
+#         sponsor = self.get_object()
+#         student_id = request.data.get('student_id')
+#
+#         if not student_id:
+#             return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         try:
+#             student = Student.objects.get(user_id=student_id)
+#             sponsor.linked_wards.add(student)
+#             return Response({'detail': 'Student linked successfully.'}, status=status.HTTP_200_OK)
+#         except ObjectDoesNotExist:
+#             return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+#
+#     @action(methods=['patch'], detail=True, url_path='unlink-student')
+#     def unlink_student(self, request, pk=None):
+#         """
+#         Unlink a student from the sponsor's profile.
+#         :param request:
+#         :param pk: The primary key of the sponsor profile.
+#         :return:
+#         """
+#         sponsor = self.get_object()
+#         student_id = request.data.get('student_id')
+#
+#         if not student_id:
+#             return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         try:
+#             student = Student.objects.get(user_id=student_id)
+#             sponsor.linked_wards.remove(student)
+#             return Response({'detail': 'Student unlinked successfully.'}, status=status.HTTP_200_OK)
+#         except ObjectDoesNotExist:
+#             return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+#
+#
+# class InstructorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+#     """
+#     View for handling instructor profile operations.
+#     This view allows instructors to retrieve and update their profile information.
+#     """
+#     serializer_class = InstructorProfileSerializer  # Assuming the same serializer is used for instructors
+#     permission_classes = [app_permissions.IsInstructor]
+#
+#     def get_object(self):
+#         """
+#         Retrieve the user profile of the currently authenticated instructor.
+#         :return:
+#         """
+#         user_id = self.request.user.id
+#         try:
+#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+#         except self.serializer_class.Meta.model.DoesNotExist:
+#             raise ValidationError({'detail': 'User profile not found.'})
+#
+#
+#
+#     def get_queryset(self):
+#         """
+#         Return the queryset for the user profile.
+#         This queryset is filtered to return only the authenticated user's profile.
+#         :return:
+#         """
+#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+#
+#     def update(self, request, *args, **kwargs):
+#         """
+#         Handle the update of the instructor profile.
+#         :param request:
+#         :param args:
+#         :param kwargs:
+#         :return:
+#         """
+#         partial = kwargs.pop('partial', False)
+#         instance = self.get_object()
+#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
+#         serializer.is_valid(raise_exception=True)
+#         self.perform_update(serializer)
+#
+#         return Response({
+#             'message': 'Profile updated successfully',
+#             'user': serializer.data
+#         }, status=status.HTTP_200_OK)
+#
+#     @action(detail=True, methods=['post'], url_path='add-certification')
+#     def add_certification(self, request, pk=None):
+#         """
+#         Add a certification to the instructor's profile.
+#         :param request:
+#         :param pk: The primary key of the instructor profile.
+#         :return:
+#         """
+#         instructor = self.get_object()
+#         serializer = CertificationSerializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         certification = serializer.save(instructor=instructor)
+#
+#         return Response({
+#             'message': 'Certification added successfully',
+#             'certification': CertificationSerializer(certification).data
+#         }, status=status.HTTP_201_CREATED)
+#
+#     @action(detail=True, methods=['get'], url_path='list-certifications')
+#     def list_certifications(self, request, pk=None):
+#         """
+#         List all certifications for the instructor.
+#         :param request:
+#         :param pk: The primary key of the instructor profile.
+#         :return:
+#         """
+#         instructor = self.get_object()
+#         certifications = instructor.certifications.all()
+#         serializer = CertificationSerializer(certifications, many=True)
+#
+#         return Response({
+#             'certifications': serializer.data
+#         }, status=status.HTTP_200_OK)
+#
+#     @action(detail=True, methods=['delete'], url_path='delete-certification')
+#     def delete_certification(self, request, pk=None):
+#         """
+#         Delete a certification from the instructor's profile.
+#         :param request:
+#         :param pk: The primary key of the instructor profile.
+#         :return:
+#         """
+#         instructor = self.get_object()
+#         certification_id = request.data.get('certification_id')
+#
+#         if not certification_id:
+#             return Response({'detail': 'Certification ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         try:
+#             certification = instructor.certifications.get(id=certification_id)
+#             certification.delete()
+#             return Response({'detail': 'Certification deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
+#         except ObjectDoesNotExist:
+#             return Response({'detail': 'Certification not found.'}, status=status.HTTP_404_NOT_FOUND)
+#
+#
+class AdminProfileRetrieveViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
-    View for handling user profile operations.
-    This view allows users to retrieve and update their profile information.
+    View for retrieving admin profile information.
     """
-    serializer_class = StudentProfileSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AdminProfileRetrieveSerializer
+    permission_classes = [app_permissions.IsAdmin]
 
     def get_object(self):
-        """
-        Retrieve the user profile of the currently authenticated student.
-        :return:
-        """
         user_id = self.request.user.id
         try:
             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
@@ -34,31 +276,77 @@ class StudentProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, 
             raise ValidationError({'detail': 'User profile not found.'})
 
     def get_queryset(self):
-        """
-        Return the queryset for the user profile.
-        This queryset is filtered to return only the authenticated user's profile.
-        :return:
-        """
+        return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+
+
+class AdminProfileUpdateViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    View for updating admin profile information (PUT and PATCH).
+    """
+    serializer_class = AdminProfileUpdateSerializer
+    permission_classes = [app_permissions.IsAdmin]
+
+    def get_object(self):
+        user_id = self.request.user.id
+        try:
+            return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+        except self.serializer_class.Meta.model.DoesNotExist:
+            raise ValidationError({'detail': 'User profile not found.'})
+
+    def get_queryset(self):
         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
 
     def update(self, request, *args, **kwargs):
-        """
-        Handle the update of the user profile.
-        :param request:
-        :param args:
-        :param kwargs:
-        :return:
-        """
-        partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-
         return Response({
             'message': 'Profile updated successfully',
             'user': serializer.data
         }, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({
+            'message': 'Profile partially updated successfully',
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+
+
+class UserAccountDeleteViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet):
+    """
+    View for deleting admin profile information (DELETE).
+    """
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        user_id = self.request.user.id
+        try:
+            return self.serializer_class.Meta.model.objects.get(id=user_id)
+        except self.serializer_class.Meta.model.DoesNotExist:
+            raise ValidationError({'detail': 'User not found.'})
+
+    def get_queryset(self):
+        return self.serializer_class.Meta.model.objects.filter(id=self.request.user.id)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Handle the deletion of the admin profile.
+        :param request:
+        :return:
+        """
+        user = request.user
+        user.delete()
+        return Response({
+            'message': 'Account deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
 
 
 class RegisterViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
