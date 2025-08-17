@@ -284,7 +284,7 @@ def cleanup_unverified_users(sender, instance, created, **kwargs):
         return
 
     if instance.purpose == "register":
-        expire_time = instance.expires_at + timedelta(minutes=5) # expiry time + 5 mins
+        expire_time = instance.expires_at + timedelta(minutes=5)  # expiry time + 5 mins
 
         def delete_unverified():
             expired_users = User.objects.filter(
