@@ -9,8 +9,6 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.core.validators import RegexValidator
 
-from shared.models import GenericBaseModel
-
 # Create your models here.
 
 class UserManager(BaseUserManager):
@@ -79,7 +77,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("admin", "Admin"),
         ("temp_user", "Temporary User"),
     )
-    id = models.UUIDField(
+    id = models.CharField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
@@ -120,6 +118,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         :return: Full name as a string.
         """
         return f"{self.first_name} {self.last_name}".strip()
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            if self.use_email_as_user_ID:
+                self.id = self.email
+        super().save(*args, **kwargs)
 
 
 class OTP(models.Model):
@@ -179,7 +183,7 @@ class Student(models.Model):
     current_grade = models.CharField(max_length=50, blank=True, null=True, help_text="Current grade of the student.")
 
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} ({self.user.user_ID})"
+        return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
 
 
 class Sponsor(models.Model):
@@ -204,7 +208,7 @@ class Sponsor(models.Model):
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the sponsor.")
 
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} ({self.user.user_ID})"
+        return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
 
 
 class Instructor(models.Model):
@@ -230,7 +234,7 @@ class Instructor(models.Model):
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the instructor.")
 
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} ({self.user.user_ID})"
+        return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
     
 
 class Certification(models.Model):
@@ -272,7 +276,7 @@ class Admin(models.Model):
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the admin.")
 
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} ({self.user.user_ID})"
+        return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
 
 @receiver(post_save, sender=OTP)
 def cleanup_unverified_users(sender, instance, created, **kwargs):
@@ -280,7 +284,7 @@ def cleanup_unverified_users(sender, instance, created, **kwargs):
         return
 
     if instance.purpose == "register":
-        expire_time = instance.expires_at + timedelta(minutes=5)
+        expire_time = instance.expires_at + timedelta(minutes=5) # expiry time + 5 mins
 
         def delete_unverified():
             expired_users = User.objects.filter(

@@ -1,16 +1,14 @@
-import uuid, random, os, json
+import random, os, json
 from datetime import timedelta
 from dotenv import load_dotenv
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
-from django.core.mail import send_mail
-from django.conf import settings
 from drf_spectacular.utils import extend_schema, extend_schema_field
 
 from rest_framework import serializers
-from rest_framework.fields import empty, JSONField
+from rest_framework.fields import empty
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -110,7 +108,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError(f"Invalid role: {role}.")
             code = "12345" if os.getenv('OTP_NOT_IN_PROD', 'True').lower() == "true" else f"{random.randint(10000, 99999)}"
-            otp_token_lifetime = int(os.getenv('OTP_LIFETIME', 10))  # Default to 10 minutes if not set
+            otp_token_lifetime = int(os.getenv('OTP_LIFETIME', 600))  # Default to 10 minutes if not set
             expiry = timezone.now() + timedelta(seconds=otp_token_lifetime)
 
             OTP.objects.update_or_create(
@@ -343,7 +341,7 @@ class SponsorProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Upload an image file."
     )
-    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
     )
@@ -435,7 +433,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Sponsor linked to the student profile."
     )
-    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
     )
@@ -511,7 +509,7 @@ class InstructorProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Upload an image file."
     )
-    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
     )
@@ -595,7 +593,7 @@ class AdminProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Upload an image file."
     )
-    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
     )
