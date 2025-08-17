@@ -19,10 +19,62 @@ class SoftDeleteModelMixin:
         instance.is_hidden = True
         instance.save(update_fields=['is_hidden'])
 
+class PaginatedListMixin:
+    """
+    Mixin to provide pagination for list views.
+    """
+    pagination_class = None  # Set this to your pagination class if needed
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return Response({
+                'page': self.paginator.page.number if hasattr(self, 'paginator') and hasattr(self.paginator, 'page') else 1,
+                'records': len(serializer.data),
+                'total': self.paginator.page.paginator.count if hasattr(self, 'paginator') and hasattr(self.paginator, 'page') else len(queryset),
+                'rows': serializer.data
+            })
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'page': 1,
+            'records': len(serializer.data),
+            'total': len(queryset),
+            'rows': serializer.data
+        })
+
+
+class DetailedRetrieveMixin:
+
+    """
+    Mixin to provide detailed retrieve functionality.
+    """
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        queryset = self.filter_queryset(self.get_queryset()).order_by('pk')
+        pk_list = list(queryset.values_list('pk', flat=True))
+        try:
+            idx = pk_list.index(instance.pk)
+        except ValueError:
+            idx = -1
+        prev_pk = pk_list[idx - 1] if idx > 0 else None
+        next_pk = pk_list[idx + 1] if idx != -1 and idx + 1 < len(pk_list) else None
+        serializer = self.get_serializer(instance)
+        return Response({
+            'data': serializer.data,
+            'prev_pk': prev_pk,
+            'next_pk': next_pk,
+            'total': len(pk_list)
+        })
+
+
 class GenericSoftDeleteViewSet(
     SoftDeleteModelMixin,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
+    PaginatedListMixin,
+    DetailedRetrieveMixin,
+    mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet
 ):
@@ -33,12 +85,6 @@ class GenericSoftDeleteViewSet(
 
     def get_queryset(self):
         return self.queryset.filter(is_hidden=False)
-
-    def perform_update(self, serializer):
-        serializer.save()
-
-    def perform_create(self, serializer):
-        serializer.save()
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())

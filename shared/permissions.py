@@ -16,26 +16,6 @@ class IsInstructor(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated) and request.user.role == 'instructor'
 
-class CannotDeleteExceptMine(BasePermission):
-    """
-    Allows deletion only if the authenticated user is the creator of the object.
-    Assumes the object has a 'created_by' field.
-    """
-    def has_object_permission(self, request, view, obj):
-        if request.method == 'DELETE':
-            return bool(request.user and request.user.is_authenticated and obj.created_by == request.user)
-        return True
-
-class CannotEditOrDeleteExceptMine(BasePermission):
-    """
-    Allows editing only if the authenticated user is the creator of the object.
-    Assumes the object has a 'created_by' field.
-    """
-    def has_object_permission(self, request, view, obj):
-        if request.method == 'PUT' or request.method == 'PATCH' or request.method == 'DELETE':
-            return bool(request.user and request.user.is_authenticated and obj.created_by == request.user)
-        return True
-
 class IsAdminOrInstructor(BasePermission):
     """
     Custom permission to only allow admins or instructors to access the view.
@@ -62,3 +42,25 @@ class IsAuthenticatedOrReadOnly(BasePermission):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True  # Allow read-only methods for all users
         return bool(request.user and request.user.is_authenticated)  # Allow write methods only for authenticated users
+
+
+# With the created_by privileges
+class CannotDeleteExceptMine(BasePermission):
+    """
+    Allows deletion only if the authenticated user is the creator of the object.
+    Assumes the object has a 'created_by' field.
+    """
+    def has_object_permission(self, request, view, obj):
+        if request.method == 'DELETE':
+            return bool(request.user and request.user.is_authenticated and obj.created_by == request.user)
+        return True
+
+class CannotEditOrDeleteExceptMine(BasePermission):
+    """
+    Allows editing only if the authenticated user is the creator of the object.
+    Assumes the object has a 'created_by' field.
+    """
+    def has_object_permission(self, request, view, obj):
+        if request.method == 'PUT' or request.method == 'PATCH' or request.method == 'DELETE':
+            return bool(request.user and request.user.is_authenticated and obj.created_by == request.user)
+        return True

@@ -18,6 +18,11 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("Users must have an email address")
         email = self.normalize_email(email)
+        if role == "instructor":
+            extra_fields.setdefault("is_staff", True)
+        elif role == "admin":
+            extra_fields.setdefault("is_staff", True)
+            extra_fields.setdefault("is_superuser", True)
         user = self.model(email=email, role=role, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -74,7 +79,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("admin", "Admin"),
         ("temp_user", "Temporary User"),
     )
-
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="Unique identifier for the user."
+    )
     email = models.EmailField(unique=True)
     use_email_as_user_ID = models.BooleanField(default=False, help_text="Use email as username for login.")
     first_name = models.CharField(max_length=50, blank=True, null=True, help_text="First name of the user.")
@@ -91,20 +101,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
 
     objects = UserManager()
+    user_students = StudentManager()
+    user_sponsors = SponsorManager()
+    user_instructors = InstructorManager()
+    user_admins = AdminManager()
+    user_temporary_users = TemporaryUserManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
-
-    def generate_user_id(self):
-        if self.first_name and self.last_name:
-            base_username = f"{self.first_name.lower()}_{self.last_name.lower()}"
-        else:
-            base_username = uuid.uuid4().hex[:8]
-        return f"{base_username}_{uuid.uuid4().hex[:6]}"
-
 
     @property
     def full_name(self):
@@ -113,17 +120,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         :return: Full name as a string.
         """
         return f"{self.first_name} {self.last_name}".strip()
-
-    @property
-    def user_ID(self):
-        """
-        Returns a unique user ID based on the boolean field, use_email_as_user_ID.
-        :return: User ID as a string.
-        """
-        if self.use_email_as_user_ID:
-            return self.email
-        return self.generate_user_id()
-
 
 
 class OTP(models.Model):
@@ -227,6 +223,7 @@ class Instructor(models.Model):
         related_name="instructor_profile",
         limit_choices_to={'role': 'instructor'}
     )
+    gender = models.CharField(choices=GENDER_CHOICES, max_length=10, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True, help_text="Phone number of the instructor.")
     address = models.TextField(blank=True, null=True, help_text="Address of the instructor.")
     bio = models.TextField(blank=True, null=True, help_text="Short biography of the instructor.")

@@ -1,274 +1,49 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets, mixins, status, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
 
 from .serializers import (
     RegistrationSerializer, VerifyOTPSerializer, LoginSerializer,
     LogoutSerializer, ForgotPasswordSerializer, ResetPasswordSerializer,
-    ChangePasswordSerializer, RegistrationLoginResponseSerializer, UserSerializer,
+    ChangePasswordSerializer, UserSerializer
 )
 
 # for Admin
-from .serializers import (AdminProfileRetrieveSerializer, AdminProfileUpdateSerializer,
-                          AdminProfileDeleteSerializer)
+from .serializers import (AdminProfileSerializer)
+
+# for students
+from .models import Student, Certification
+from .serializers import (StudentProfileSerializer)
+
+# for sponsors
+from .models import Sponsor
+from .serializers import (SponsorProfileSerializer, SponsorLinkStudentSerializer)
+
+# for instructors
+from .serializers import (InstructorProfileSerializer, CertificationSerializer)
 
 import shared.permissions as app_permissions
 from .utils import get_tokens_for_user
 
 
-# class StudentProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
-#     """
-#     View for handling user profile operations.
-#     This view allows users to retrieve and update their profile information.
-#     """
-#     serializer_class = StudentProfileSerializer
-#     permission_classes = [app_permissions.IsStudent]
-#
-#     def get_object(self):
-#         """
-#         Retrieve the user profile of the currently authenticated student.
-#         :return:
-#         """
-#         user_id = self.request.user.id
-#         try:
-#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
-#         except self.serializer_class.Meta.model.DoesNotExist:
-#             raise ValidationError({'detail': 'User profile not found.'})
-#
-#     def get_queryset(self):
-#         """
-#         Return the queryset for the user profile.
-#         This queryset is filtered to return only the authenticated user's profile.
-#         :return:
-#         """
-#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
-#
-#     def update(self, request, *args, **kwargs):
-#         """
-#         Handle the update of the user profile.
-#         :param request:
-#         :param args:
-#         :param kwargs:
-#         :return:
-#         """
-#         partial = kwargs.pop('partial', False)
-#         instance = self.get_object()
-#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_update(serializer)
-#
-#         return Response({
-#             'message': 'Profile updated successfully',
-#             'user': serializer.data
-#         }, status=status.HTTP_200_OK)
-#
-#
-# class SponsorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
-#     """
-#     View for handling sponsor profile operations.
-#     This view allows sponsors to retrieve and update their profile information.
-#     """
-#     serializer_class = SponsorProfileSerializer  # Assuming the same serializer is used for sponsors
-#     permission_classes = [app_permissions.IsSponsor]
-#
-#     def get_object(self):
-#         """
-#         Retrieve the user profile of the currently authenticated sponsor.
-#         :return:
-#         """
-#         user_id = self.request.user.id
-#         try:
-#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
-#         except self.serializer_class.Meta.model.DoesNotExist:
-#             raise ValidationError({'detail': 'User profile not found.'})
-#
-#     def get_queryset(self):
-#         """
-#         Return the queryset for the user profile.
-#         This queryset is filtered to return only the authenticated user's profile.
-#         :return:
-#         """
-#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
-#
-#     def update(self, request, *args, **kwargs):
-#         """
-#         Handle the update of the sponsor profile.
-#         :param request:
-#         :param args:
-#         :param kwargs:
-#         :return:
-#         """
-#         partial = kwargs.pop('partial', False)
-#         instance = self.get_object()
-#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_update(serializer)
-#
-#         return Response({
-#             'message': 'Profile updated successfully',
-#             'user': serializer.data
-#         }, status=status.HTTP_200_OK)
-#
-#     @action(detail=True, methods=['patch'], url_path='link-student')
-#     def link_student(self, request, pk=None):
-#         """
-#         Link a student to the sponsor's profile.
-#         :param request:
-#         :param pk: The primary key of the sponsor profile.
-#         :return:
-#         """
-#         sponsor = self.get_object()
-#         student_id = request.data.get('student_id')
-#
-#         if not student_id:
-#             return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-#
-#         try:
-#             student = Student.objects.get(user_id=student_id)
-#             sponsor.linked_wards.add(student)
-#             return Response({'detail': 'Student linked successfully.'}, status=status.HTTP_200_OK)
-#         except ObjectDoesNotExist:
-#             return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
-#
-#     @action(methods=['patch'], detail=True, url_path='unlink-student')
-#     def unlink_student(self, request, pk=None):
-#         """
-#         Unlink a student from the sponsor's profile.
-#         :param request:
-#         :param pk: The primary key of the sponsor profile.
-#         :return:
-#         """
-#         sponsor = self.get_object()
-#         student_id = request.data.get('student_id')
-#
-#         if not student_id:
-#             return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-#
-#         try:
-#             student = Student.objects.get(user_id=student_id)
-#             sponsor.linked_wards.remove(student)
-#             return Response({'detail': 'Student unlinked successfully.'}, status=status.HTTP_200_OK)
-#         except ObjectDoesNotExist:
-#             return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
-#
-#
-# class InstructorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
-#     """
-#     View for handling instructor profile operations.
-#     This view allows instructors to retrieve and update their profile information.
-#     """
-#     serializer_class = InstructorProfileSerializer  # Assuming the same serializer is used for instructors
-#     permission_classes = [app_permissions.IsInstructor]
-#
-#     def get_object(self):
-#         """
-#         Retrieve the user profile of the currently authenticated instructor.
-#         :return:
-#         """
-#         user_id = self.request.user.id
-#         try:
-#             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
-#         except self.serializer_class.Meta.model.DoesNotExist:
-#             raise ValidationError({'detail': 'User profile not found.'})
-#
-#
-#
-#     def get_queryset(self):
-#         """
-#         Return the queryset for the user profile.
-#         This queryset is filtered to return only the authenticated user's profile.
-#         :return:
-#         """
-#         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
-#
-#     def update(self, request, *args, **kwargs):
-#         """
-#         Handle the update of the instructor profile.
-#         :param request:
-#         :param args:
-#         :param kwargs:
-#         :return:
-#         """
-#         partial = kwargs.pop('partial', False)
-#         instance = self.get_object()
-#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_update(serializer)
-#
-#         return Response({
-#             'message': 'Profile updated successfully',
-#             'user': serializer.data
-#         }, status=status.HTTP_200_OK)
-#
-#     @action(detail=True, methods=['post'], url_path='add-certification')
-#     def add_certification(self, request, pk=None):
-#         """
-#         Add a certification to the instructor's profile.
-#         :param request:
-#         :param pk: The primary key of the instructor profile.
-#         :return:
-#         """
-#         instructor = self.get_object()
-#         serializer = CertificationSerializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-#         certification = serializer.save(instructor=instructor)
-#
-#         return Response({
-#             'message': 'Certification added successfully',
-#             'certification': CertificationSerializer(certification).data
-#         }, status=status.HTTP_201_CREATED)
-#
-#     @action(detail=True, methods=['get'], url_path='list-certifications')
-#     def list_certifications(self, request, pk=None):
-#         """
-#         List all certifications for the instructor.
-#         :param request:
-#         :param pk: The primary key of the instructor profile.
-#         :return:
-#         """
-#         instructor = self.get_object()
-#         certifications = instructor.certifications.all()
-#         serializer = CertificationSerializer(certifications, many=True)
-#
-#         return Response({
-#             'certifications': serializer.data
-#         }, status=status.HTTP_200_OK)
-#
-#     @action(detail=True, methods=['delete'], url_path='delete-certification')
-#     def delete_certification(self, request, pk=None):
-#         """
-#         Delete a certification from the instructor's profile.
-#         :param request:
-#         :param pk: The primary key of the instructor profile.
-#         :return:
-#         """
-#         instructor = self.get_object()
-#         certification_id = request.data.get('certification_id')
-#
-#         if not certification_id:
-#             return Response({'detail': 'Certification ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-#
-#         try:
-#             certification = instructor.certifications.get(id=certification_id)
-#             certification.delete()
-#             return Response({'detail': 'Certification deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
-#         except ObjectDoesNotExist:
-#             return Response({'detail': 'Certification not found.'}, status=status.HTTP_404_NOT_FOUND)
-#
-#
-class AdminProfileRetrieveViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class StudentProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
-    View for retrieving admin profile information.
+    View for handling user profile operations.
+    This view allows users to retrieve and update their profile information.
     """
-    serializer_class = AdminProfileRetrieveSerializer
-    permission_classes = [app_permissions.IsAdmin]
+    tag_name = "Student Profile"
+    serializer_class = StudentProfileSerializer
+    permission_classes = [app_permissions.IsStudent]
 
     def get_object(self):
+        """
+        Retrieve the user profile of the currently authenticated student.
+        :return:
+        """
         user_id = self.request.user.id
         try:
             return self.serializer_class.Meta.model.objects.get(user_id=user_id)
@@ -276,53 +51,279 @@ class AdminProfileRetrieveViewSet(mixins.RetrieveModelMixin, viewsets.GenericVie
             raise ValidationError({'detail': 'User profile not found.'})
 
     def get_queryset(self):
-        return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
-
-
-class AdminProfileUpdateViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
-    """
-    View for updating admin profile information (PUT and PATCH).
-    """
-    serializer_class = AdminProfileUpdateSerializer
-    permission_classes = [app_permissions.IsAdmin]
-
-    def get_object(self):
-        user_id = self.request.user.id
-        try:
-            return self.serializer_class.Meta.model.objects.get(user_id=user_id)
-        except self.serializer_class.Meta.model.DoesNotExist:
-            raise ValidationError({'detail': 'User profile not found.'})
-
-    def get_queryset(self):
+        """
+        Return the queryset for the user profile.
+        This queryset is filtered to return only the authenticated user's profile.
+        :return:
+        """
         return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
 
     def update(self, request, *args, **kwargs):
+        """
+        Handle the update of the user profile.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+
         return Response({
             'message': 'Profile updated successfully',
             'user': serializer.data
         }, status=status.HTTP_200_OK)
 
-    def partial_update(self, request, *args, **kwargs):
+
+class SponsorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    View for handling sponsor profile operations.
+    This view allows sponsors to retrieve and update their profile information.
+    """
+    tag_name = "Sponsor Profile"
+    serializer_class = SponsorProfileSerializer  # Assuming the same serializer is used for sponsors
+    permission_classes = [app_permissions.IsSponsor]
+
+    def get_object(self):
+        """
+        Retrieve the user profile of the currently authenticated sponsor.
+        :return:
+        """
+        user_id = self.request.user.id
+        try:
+            return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+        except self.serializer_class.Meta.model.DoesNotExist:
+            raise ValidationError({'detail': 'User profile not found.'})
+
+    def get_queryset(self):
+        """
+        Return the queryset for the user profile.
+        This queryset is filtered to return only the authenticated user's profile.
+        :return:
+        """
+        return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle the update of the sponsor profile.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+
         return Response({
-            'message': 'Profile partially updated successfully',
+            'message': 'Profile updated successfully',
             'user': serializer.data
         }, status=status.HTTP_200_OK)
 
 
+class SponsorLinkStudentViewSet(viewsets.GenericViewSet):
+    """
+    Link or Unlink a student to the current authenticated sponsor's profile.
+    """
+    tag_name = "Sponsor Student Link"
+    serializer_class = SponsorLinkStudentSerializer
+    permission_classes = [app_permissions.IsSponsor]
+
+    @action(methods=['post'], detail=False, url_path='link-student')
+    def link_student(self, request, pk=None):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'sponsor':
+            return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        student_id = serializer.validated_data.get('student_id')
+        try:
+            student = Student.objects.get(user_id=student_id)
+            student.linked_sponsor = Sponsor.objects.get(user_id=user.id)
+            student.save()
+            return Response({'detail': 'Student linked successfully.'}, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(methods=['post'], detail=False, url_path='unlink-student')
+    def unlink_student(self, request, pk=None):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'sponsor':
+            return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        student_id = serializer.validated_data.get('student_id')
+        try:
+            student = Student.objects.get(user_id=student_id)
+            student.linked_sponsor = None
+            student.save()
+            return Response({'detail': 'Student unlinked successfully.'}, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # @action(detail=True, methods=['patch'], url_path='link-student')
+    # def link_student(self, request, pk=None):
+    #     """
+    #     Link a student to the sponsor's profile.
+    #     :param request:
+    #     :param pk: The primary key of the sponsor profile.
+    #     :return:
+    #     """
+    #
+    #     sponsor = self.get_object()
+    #     student_id = request.data.get('student_id')
+    #
+    #     if not student_id:
+    #         return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    #
+    #     try:
+    #         student = Student.objects.get(user_id=student_id)
+    #         sponsor.linked_wards.add(student)
+    #         return Response({'detail': 'Student linked successfully.'}, status=status.HTTP_200_OK)
+    #     except ObjectDoesNotExist:
+    #         return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+    #
+    # @action(methods=['patch'], detail=True, url_path='unlink-student')
+    # def unlink_student(self, request, pk=None):
+    #     """
+    #     Unlink a student from the sponsor's profile.
+    #     :param request:
+    #     :param pk: The primary key of the sponsor profile.
+    #     :return:
+    #     """
+    #     sponsor = self.get_object()
+    #     student_id = request.data.get('student_id')
+    #
+    #     if not student_id:
+    #         return Response({'detail': 'Student ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    #
+    #     try:
+    #         student = Student.objects.get(user_id=student_id)
+    #         sponsor.linked_wards.remove(student)
+    #         return Response({'detail': 'Student unlinked successfully.'}, status=status.HTTP_200_OK)
+    #     except ObjectDoesNotExist:
+    #         return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class UserAccountDeleteViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet):
+class CertificationViewSet(viewsets.ModelViewSet):
+    tag_name = 'Instructor Certification'
+    serializer_class = CertificationSerializer
+    permission_classes = [app_permissions.IsInstructor | app_permissions.IsAdmin]
+
+    def get_queryset(self):
+        instructor_id = self.kwargs.get('instructor_pk')
+        return Certification.objects.filter(instructor_id=instructor_id)
+
+    def perform_create(self, serializer):
+        instructor_id = self.kwargs.get('instructor_pk')
+        serializer.save(instructor_id=instructor_id)
+
+
+class InstructorProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    View for handling instructor profile operations.
+    This view allows instructors to retrieve and update their profile information.
+    """
+    tag_name = "Instructor Profile"
+    serializer_class = InstructorProfileSerializer  # Assuming the same serializer is used for instructors
+    permission_classes = [app_permissions.IsInstructor]
+
+    def get_object(self):
+        """
+        Retrieve the user profile of the currently authenticated instructor.
+        :return:
+        """
+        user_id = self.request.user.id
+        try:
+            return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+        except self.serializer_class.Meta.model.DoesNotExist:
+            raise ValidationError({'detail': 'User profile not found.'})
+
+    def get_queryset(self):
+        """
+        Return the queryset for the user profile.
+        This queryset is filtered to return only the authenticated user's profile.
+        :return:
+        """
+        return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle the update of the instructor profile.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response({
+            'message': 'Profile updated successfully',
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+
+class AdminProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    View for handling admin profile operations.
+    This view allows admins to retrieve and update their profile information.
+    """
+    tag_name = 'Admin Profile'
+    serializer_class = AdminProfileSerializer
+    permission_classes = [app_permissions.IsAdmin]
+
+    def get_object(self):
+        """
+        Retrieve the user profile of the currently authenticated admin.
+        :return:
+        """
+        user_id = self.request.user.id
+        try:
+            return self.serializer_class.Meta.model.objects.get(user_id=user_id)
+        except self.serializer_class.Meta.model.DoesNotExist:
+            raise ValidationError({'detail': 'User profile not found.'})
+
+    def get_queryset(self):
+        """
+        Return the queryset for the user profile.
+        This queryset is filtered to return only the authenticated user's profile.
+        :return:
+        """
+        return self.serializer_class.Meta.model.objects.filter(user_id=self.request.user.id)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle the update of the admin profile.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response({
+            'message': 'Profile updated successfully',
+            'user': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class UserAccountDeleteViewSet(viewsets.GenericViewSet):
     """
     View for deleting admin profile information (DELETE).
     """
+    tag_name = 'Authentication'
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
@@ -336,7 +337,23 @@ class UserAccountDeleteViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.filter(id=self.request.user.id)
 
-    def destroy(self, request, *args, **kwargs):
+    # @swagger_auto_schema(
+    #     operation_summary='Delete Account',
+    #     operation_description='Allows current user to delete their account.',
+    #     responses={
+    #         200: openapi.Response(
+    #             'Success',
+    #             openapi.Schema(type=openapi.TYPE_STRING, description='Account deleted successfully')
+    #         ),
+    #         400: openapi.Response('Bad request'),
+    #         401: openapi.Response(
+    #             'Unauthorized',
+    #             openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')
+    #         ),
+    #     }
+    # )
+    @action(methods=['delete'], detail=False, url_path='delete-account')
+    def delete_account(self, request, *args, **kwargs):
         """
         Handle the deletion of the admin profile.
         :param request:
@@ -354,15 +371,16 @@ class RegisterViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     View for handling user registration.
     This view allows new users to register by creating a new user profile.
     """
+    tag_name = 'Authentication'
     serializer_class = RegistrationSerializer
     permission_classes = []  # No authentication required for registration
 
-    @swagger_auto_schema(
-        responses={
-            201: openapi.Response('Success', RegistrationLoginResponseSerializer),
-            400: openapi.Response('Bad request'),
-        }
-    )
+    # @swagger_auto_schema(
+    #     responses={
+    #         201: openapi.Response('Success', RegistrationLoginResponseSerializer),
+    #         400: openapi.Response('Bad request'),
+    #     }
+    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a new user profile.
@@ -395,6 +413,7 @@ class LoginViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     View for handling user login.
     This view allows users to log in by providing their credentials.
     """
+    tag_name = 'Authentication'
     serializer_class = LoginSerializer
     permission_classes = []  # No authentication required for login
 
@@ -405,12 +424,12 @@ class LoginViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         """
         serializer.save()
 
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response('Success', RegistrationLoginResponseSerializer),
-            400: openapi.Response('Bad request'),
-        }
-    )
+    # @swagger_auto_schema(
+    #     responses={
+    #         200: openapi.Response('Success', RegistrationLoginResponseSerializer),
+    #         400: openapi.Response('Bad request'),
+    #     }
+    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a user login session.
@@ -437,18 +456,19 @@ class LogoutViewSet(viewsets.GenericViewSet):
     View for handling user logout.
     This view allows users to log out by invalidating their session or tokens.
     """
+    tag_name = 'Authentication'
     serializer_class = LogoutSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_summary='Logout User',
-        operation_description='Logs out the user by invalidating their session or tokens.',
-        methods=['post'],
-        responses={
-            200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Logout successful')),
-            401: openapi.Response('Unauthorized', openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')),
-        }
-    )
+    # @swagger_auto_schema(
+    #     operation_summary='Logout User',
+    #     operation_description='Logs out the user by invalidating their session or tokens.',
+    #     methods=['post'],
+    #     responses={
+    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Logout successful')),
+    #         401: openapi.Response('Unauthorized', openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')),
+    #     }
+    # )
     @action(detail=False, methods=['post'], url_path='logout')
     def logout(self, request):
         """
@@ -475,15 +495,19 @@ class VerifyOTPViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     View for handling OTP verification.
     This view allows users to verify their OTPs for registration or other purposes.
     """
+    tag_name = 'Authentication'
     serializer_class = VerifyOTPSerializer
     permission_classes = []  # No authentication required for OTP verification
 
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='OTP verified successfully')),
-            400: openapi.Response('Bad request'),
-        }
-    )
+    # @swagger_auto_schema(
+    #     operation_summary='Verify OTP',
+    #     operation_description='Allows users to verify their OTPs for registration or other purposes.',
+    #     request_body=VerifyOTPSerializer,
+    #     responses={
+    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='OTP verified successfully')),
+    #         400: openapi.Response('Bad request'),
+    #     }
+    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of an OTP verification request.
@@ -503,15 +527,18 @@ class ForgotPasswordViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     View for handling forgot password requests.
     This view allows users to request a password reset by providing their email.
     """
+    tag_name = 'Authentication'
     serializer_class = ForgotPasswordSerializer
     permission_classes = []  # No authentication required for forgot password
 
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset email sent')),
-            400: openapi.Response('Bad request'),
-        }
-    )
+    # @swagger_auto_schema(
+    #     operation_summary='Forgot Password',
+    #     operation_description='Allows users to request a password reset by providing their email.',
+    #     responses={
+    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset email sent')),
+    #         400: openapi.Response('Bad request'),
+    #     }
+    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a forgot password request.
@@ -531,15 +558,19 @@ class ResetPasswordViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     View for handling password reset requests.
     This view allows users to reset their password using a valid OTP.
     """
+    tag_name = 'Authentication'
     serializer_class = ResetPasswordSerializer
     permission_classes = []  # No authentication required for reset password
 
-    @swagger_auto_schema(
-        responses={
-            200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset successful')),
-            400: openapi.Response('Bad request'),
-        }
-    )
+    # @swagger_auto_schema(
+    #     operation_summary='Reset Password',
+    #     operation_description='After using Forgot Password, this allows users to reset their password using a valid OTP.',
+    #     request_body=ResetPasswordSerializer,
+    #     responses={
+    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset successful')),
+    #         400: openapi.Response('Bad request'),
+    #     }
+    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a password reset request.
@@ -559,6 +590,7 @@ class ChangePasswordViewSet(viewsets.GenericViewSet):
     View for handling password change requests.
     This view allows authenticated users to change their password.
     """
+    tag_name = 'Authentication'
     serializer_class = ChangePasswordSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -571,21 +603,21 @@ class ChangePasswordViewSet(viewsets.GenericViewSet):
         user = get_user_model()
         return user.objects.filter(id=self.request.user.id)
 
-    @swagger_auto_schema(
-        operation_summary='Change Password',
-        operation_description='Allows authenticated users to change their password.',
-        responses={
-            200: openapi.Response(
-                'Success',
-                openapi.Schema(type=openapi.TYPE_STRING, description='Password changed successfully')
-            ),
-            400: openapi.Response('Bad request'),
-            401: openapi.Response(
-                'Unauthorized',
-                openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')
-            ),
-        }
-    )
+    # @swagger_auto_schema(
+    #     operation_summary='Change Password',
+    #     operation_description='Allows authenticated users to change their password.',
+    #     responses={
+    #         200: openapi.Response(
+    #             'Success',
+    #             openapi.Schema(type=openapi.TYPE_STRING, description='Password changed successfully')
+    #         ),
+    #         400: openapi.Response('Bad request'),
+    #         401: openapi.Response(
+    #             'Unauthorized',
+    #             openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')
+    #         ),
+    #     }
+    # )
     @action(detail=False, methods=['post'], url_path='change-password')
     def change_password(self, request):
         """

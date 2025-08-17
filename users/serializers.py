@@ -1,6 +1,4 @@
-import uuid
-import random
-import os
+import uuid, random, os, json
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -9,9 +7,10 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
+from drf_spectacular.utils import extend_schema, extend_schema_field
 
 from rest_framework import serializers
-from rest_framework.fields import empty
+from rest_framework.fields import empty, JSONField
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -35,10 +34,11 @@ def validate_email(value):
 
 
 class UserSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = User
-        fields = ['id', 'user_ID', 'email', 'first_name', 'last_name', 'role', 'is_verified', 'is_active']
-        read_only_fields = ['id', 'user_ID', 'is_verified', 'is_active']
+        fields = ['id', 'email', 'first_name', 'last_name', 'full_name', 'role', 'is_verified', 'is_active']
+        read_only_fields = ['id', 'is_verified', 'is_active', 'full_name']
 
     def validate_email(self, value):
         return validate_email(value)
@@ -52,7 +52,6 @@ class UserSerializer(serializers.ModelSerializer):
 class RegistrationSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=User.ROLE_CHOICES, required=False)
     email = serializers.EmailField(required=True)
-    user_ID = serializers.CharField(read_only=True)
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
     password2 = serializers.CharField(write_only=True, required=True)
@@ -61,7 +60,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'user_ID', 'email', 'password', 'password2', 'first_name', 'last_name',
+            'id', 'email', 'password', 'password2', 'first_name', 'last_name',
             'role', 'use_email_as_user_ID'
         ]
         extra_kwargs = {
@@ -69,7 +68,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
             'password2': {'write_only': True, 'required': True},
             'use_email_as_user_ID': {'required': False, 'write_only': True},
         }
-        read_only_fields = ['id', 'user_ID']
+        read_only_fields = ['id',]
 
     def validate(self, attrs):
         if 'email' in attrs:
@@ -329,29 +328,145 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.save()
 
 
-class StudentProfileSerializer(serializers.ModelSerializer):
+# class UpdateUserProfileSerializer(serializers.ModelSerializer):
+#     user_id = serializers.PrimaryKeyRelatedField(
+#         queryset=User.objects.all(),
+#         required=True,
+#         help_text="User ID to update the profile."
+#     )
+#
+
+class SponsorProfileSerializer(serializers.ModelSerializer):
     profile_picture_media = serializers.ImageField(
-        allow_empty_file=True,
         allow_null=True,
         required=False,
         write_only=True,
         help_text="Upload an image file."
     )
-    # user = serializers.PrimaryKeyRelatedField(read_only=True)
+    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_details = serializers.SerializerMethodField(
+        help_text="Details of the user as a JSON string."
+    )
+    linked_wards = serializers.SerializerMethodField(
+        help_text="List of wards linked to the sponsor as a JSON string."
+    )
+
+    @extend_schema_field(serializers.CharField())
+    def get_user_details(self, obj):
+        user = obj.user
+        if user:
+            data = UserSerializer(user).data
+            return json.dumps(data)
+        return None
+
+    @extend_schema_field(serializers.CharField())
+    def get_linked_wards(self, obj):
+        wards = obj.student_set.all()
+        if wards:
+            data = StudentProfileSerializer(wards, many=True).data
+            # Remove or exclude fields as needed, for example:
+            # for ward in data:
+            #     ward.pop('profile_picture', None)
+            return json.dumps(data)
+        return None
+
+    class Meta:
+        model = Sponsor
+        fields = ['user_id', 'user', 'gender', 'phone_number', 'profile_picture_media',
+                  'profile_picture', 'user_details', 'linked_wards']
+        read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
+        extra_kwargs = {
+            'user_details': {'read_only': True},
+            'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
+        }
+
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media)
+
+        if not self.instance and not attrs.get('user'):
+            raise serializers.ValidationError("User is required to create a sponsor profile.")
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data.pop('user')
+        validated_data.pop('profile_picture_media')
+        sponsor = Sponsor.objects.create(user=user, **validated_data)
+        return sponsor
+
+
+class SponsorLinkStudentSerializer(serializers.Serializer):
+    student_id = serializers.UUIDField(
+        help_text="ID of the student to link to the sponsor."
+    )
+
+    def validate_student_id(self, value):
+        try:
+            Student.objects.get(user_id=value)
+        except Student.DoesNotExist:
+            raise serializers.ValidationError("Student with this ID does not exist.")
+        return value
+
+    def save(self, sponsor):
+        student_id = self.validated_data['student_id']
+        student = Student.objects.get(user_id=student_id)
+        student.linked_sponsor = sponsor
+        student.save()
+        return student
+
+
+class StudentProfileSerializer(serializers.ModelSerializer):
+    profile_picture_media = serializers.ImageField(
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
     linked_sponsor = serializers.PrimaryKeyRelatedField(
         queryset=Sponsor.objects.all(),
         required=False,
         allow_null=True,
         help_text="Sponsor linked to the student profile."
     )
-    user_details = UserSerializer(source='user', read_only=True)
+    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_details = serializers.SerializerMethodField(
+        help_text="Details of the user as a JSON string."
+    )
+    linked_sponsor_details = serializers.SerializerMethodField(
+        help_text="Details of the linked sponsor as a JSON string."
+    )
+
+    @extend_schema_field(serializers.CharField())
+    def get_user_details(self, obj):
+        user = obj.user
+        if user:
+            data = UserSerializer(user).data
+            return json.dumps(data)
+        return None
+
+    @extend_schema_field(serializers.CharField())
+    def get_linked_sponsor_details(self, obj):
+        sponsor = obj.linked_sponsor
+        if sponsor:
+            data = SponsorProfileSerializer(sponsor).data
+            # Remove or exclude fields as needed, for example:
+            data.pop('user_details', None)  # Exclude 'profile_picture' field
+            return json.dumps(data)
+        return None
 
     class Meta:
         model = Student
-        fields = ['id', 'gender', 'date_of_birth', 'phone_number', 'nationality',
+        fields = ['user_id', 'user', 'user_details', 'gender', 'phone_number', 'nationality',
                   'current_school', 'current_grade', 'location', 'profile_picture_media',
-                  'linked_sponsor', 'user_details']
-        read_only_fields = ['id', 'user', 'user_details', 'profile_picture']
+                  'profile_picture', 'linked_sponsor', 'linked_sponsor_details', 'date_of_birth']
+        read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
         extra_kwargs = {
             'linked_sponsor': {'required': False, 'allow_null': True},
             'user_details': {'read_only': True},
@@ -379,47 +494,6 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return student
 
 
-class SponsorProfileSerializer(serializers.ModelSerializer):
-    profile_picture_media = serializers.ImageField(
-        allow_empty_file=True,
-        allow_null=True,
-        required=False,
-        write_only=True,
-        help_text="Upload an image file."
-    )
-    user = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        required=False,
-        help_text="User associated with the sponsor profile."
-    )
-    user_details = UserSerializer(source='user', read_only=True)
-
-    class Meta:
-        model = Sponsor
-        fields = ['id', 'user', 'gender', 'phone_number', 'address', 'profile_picture_media', 'user_details']
-        read_only_fields = ['id', 'user', 'profile_picture']
-
-    def validate_image(self, value):
-        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
-            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
-        return value
-
-    def validate(self, attrs):
-        if 'profile_picture_media' in attrs:
-            media = self.validate_image(attrs.get('profile_picture_media'))
-            attrs['profile_picture'] = convert_to_base64(media)
-
-        if not self.instance and not attrs.get('user'):
-            raise serializers.ValidationError("User is required to create a sponsor profile.")
-        return attrs
-
-    def create(self, validated_data):
-        user = validated_data.pop('user')
-        validated_data.pop('profile_picture_media')
-        sponsor = Sponsor.objects.create(user=user, **validated_data)
-        return sponsor
-
-
 class CertificationSerializer(serializers.ModelSerializer):
     instructor = serializers.PrimaryKeyRelatedField(
         read_only=True,
@@ -432,25 +506,34 @@ class CertificationSerializer(serializers.ModelSerializer):
 
 class InstructorProfileSerializer(serializers.ModelSerializer):
     profile_picture_media = serializers.ImageField(
-        allow_empty_file=True,
         allow_null=True,
         required=False,
         write_only=True,
         help_text="Upload an image file."
     )
-    user = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        required=False,
-        help_text="User associated with the instructor profile."
+    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_details = serializers.SerializerMethodField(
+        help_text="Details of the user as a JSON string."
     )
-    user_details = UserSerializer(source='user', read_only=True)
     certifications = CertificationSerializer(many=True, required=False, allow_null=True, allow_empty=True)
+
+    @extend_schema_field(serializers.CharField())
+    def get_user_details(self, obj):
+        user = obj.user
+        if user:
+            data = UserSerializer(user).data
+            return json.dumps(data)
+        return None
 
     class Meta:
         model = Instructor
-        fields = ['id', 'user', 'phone_number', 'address', 'profile_picture_media', 'user_details',
-                  'certifications']
-        read_only_fields = ['id', 'user', 'profile_picture']
+        fields = ['user_id', 'user', 'user_details', 'gender', 'phone_number', 'profile_picture_media', 'bio',
+                  'profile_picture', 'certifications']
+        read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
+        extra_kwargs = {
+            'user_details': {'read_only': True},
+            'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
+        }
 
     def validate_image(self, value):
         if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -505,33 +588,33 @@ class InstructorProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
-# GET Serializer
-class AdminProfileRetrieveSerializer(serializers.ModelSerializer):
-    user_details = UserSerializer(source='user', read_only=True)
-
-    class Meta:
-        model = Admin
-        fields = "__all__"
-        read_only_fields = ['id', 'user', 'profile_picture', 'user_details']
-
-# POST Serializer (Create)
-class AdminProfileCreateSerializer(serializers.ModelSerializer):
+class AdminProfileSerializer(serializers.ModelSerializer):
     profile_picture_media = serializers.ImageField(
-        allow_empty_file=True,
         allow_null=True,
         required=False,
         write_only=True,
         help_text="Upload an image file."
     )
-    user = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        help_text="User associated with the admin profile."
+    user_id = serializers.UUIDField(source='user.id', read_only=True)
+    user_details = serializers.SerializerMethodField(
+        help_text="Details of the user as a JSON string."
     )
+
+    @extend_schema_field(serializers.CharField())
+    def get_user_details(self, obj):
+        user = obj.user
+        if user:
+            data = UserSerializer(user).data
+            return json.dumps(data)
+        return None
 
     class Meta:
         model = Admin
-        exclude = ['profile_picture']
+        fields = ['user_id', 'user', 'user_details', 'gender', 'phone_number', 'profile_picture_media',
+                  'profile_picture', 'address']
+        read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
         extra_kwargs = {
+            'user_details': {'read_only': True},
             'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
         }
 
@@ -543,45 +626,7 @@ class AdminProfileCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if 'profile_picture_media' in attrs:
             media = self.validate_image(attrs.get('profile_picture_media'))
-            attrs['profile_picture'] = convert_to_base64(media)
-            attrs.pop('profile_picture_media', None)
-        if not attrs.get('user'):
-            raise serializers.ValidationError("User is required to create an admin profile.")
-        return attrs
-
-    def create(self, validated_data):
-        user = validated_data.pop('user')
-        validated_data.pop('profile_picture_media', None)
-        admin = Admin.objects.create(user=user, **validated_data)
-        return admin
-
-# PUT/PATCH Serializer (Update)
-class AdminProfileUpdateSerializer(serializers.ModelSerializer):
-    profile_picture_media = serializers.ImageField(
-        allow_empty_file=True,
-        allow_null=True,
-        required=False,
-        write_only=True,
-        help_text="Upload an image file."
-    )
-
-    class Meta:
-        model = Admin
-        exclude = ['profile_picture', 'user']
-        extra_kwargs = {
-            'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
-        }
-
-    def validate_image(self, value):
-        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
-            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
-        return value
-
-    def validate(self, attrs):
-        if 'profile_picture_media' in attrs:
-            media = self.validate_image(attrs.get('profile_picture_media'))
-            attrs['profile_picture'] = convert_to_base64(media)
-            attrs.pop('profile_picture_media', None)
+            attrs['profile_picture'] = convert_to_base64(media, max_size=10 * 1024 * 1024)  # 10 MB max size
         return attrs
 
     def update(self, instance, validated_data):
@@ -590,9 +635,3 @@ class AdminProfileUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-
-# DELETE Serializer (Optional, usually not needed, but for completeness)
-class AdminProfileDeleteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Admin
-        fields = ['id']

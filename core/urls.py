@@ -16,25 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from drf_spectacular import openapi
 from rest_framework import permissions
 
-schema_view = get_schema_view(
-    openapi.Info(
-        title="iT360 Academy API",
-        default_version='v1',
-        description="API documentation for iT360 platform",
-    ),
-    public=True,
-    permission_classes=[permissions.AllowAny,],
-)
-
-
+schema_view = SpectacularAPIView.as_view()
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/', include('users.urls')),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    # path('course/', include('courses.urls')),
+    path('api/schema/', schema_view, name='schema'),
+    # Swagger and ReDoc views
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
