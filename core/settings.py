@@ -38,6 +38,7 @@ ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS').split(',') if os.getenv('DJANG
 # Application definition
 
 INSTALLED_APPS = [
+    'drf_spectacular',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,7 +49,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'users',
-    'drf_yasg',  # Swagger documentation
 ]
 
 MIDDLEWARE = [
@@ -164,6 +164,24 @@ REST_FRAMEWORK = {
         # 'rest_framework.permissions.IsAuthenticated',
         'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'core.schema.ViewSetTagSchema',
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ),
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'IT360 API',
+    'DESCRIPTION': 'API documentation for IT360 project',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': '',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'PREPROCESSING_HOOKS': [],
 }
 
 # Simple JWT settings
@@ -183,7 +201,7 @@ SIMPLE_JWT = {
 }
 
 # Email settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.example.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
