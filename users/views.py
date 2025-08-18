@@ -148,6 +148,7 @@ class SponsorProfileViewSet(RetrieveProfileMixin, UpdateProfileMixin, viewsets.G
 class SponsorLinkStudentViewSet(viewsets.GenericViewSet):
     """
     Link or Unlink a student to the current authenticated sponsor's profile.
+    Use either student_id or student email but not both.
     """
     tag_name = "Sponsor Student Link"
     serializer_class = SponsorLinkStudentSerializer
