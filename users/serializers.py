@@ -53,7 +53,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
     password2 = serializers.CharField(write_only=True, required=True)
-    id = serializers.IntegerField(read_only=True)
+    id = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
@@ -345,9 +345,6 @@ class SponsorProfileSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
     )
-    linked_wards = serializers.SerializerMethodField(
-        help_text="List of wards linked to the sponsor as a JSON string."
-    )
 
     @extend_schema_field(serializers.CharField())
     def get_user_details(self, obj):
@@ -357,21 +354,10 @@ class SponsorProfileSerializer(serializers.ModelSerializer):
             return json.dumps(data)
         return None
 
-    @extend_schema_field(serializers.CharField())
-    def get_linked_wards(self, obj):
-        wards = obj.student_set.all()
-        if wards:
-            data = StudentProfileSerializer(wards, many=True).data
-            # Remove or exclude fields as needed, for example:
-            # for ward in data:
-            #     ward.pop('profile_picture', None)
-            return json.dumps(data)
-        return None
-
     class Meta:
         model = Sponsor
         fields = ['user_id', 'user', 'gender', 'phone_number', 'profile_picture_media',
-                  'profile_picture', 'user_details', 'linked_wards']
+                  'profile_picture', 'user_details']
         read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
         extra_kwargs = {
             'user_details': {'read_only': True},
@@ -427,12 +413,6 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Upload an image file."
     )
-    linked_sponsor = serializers.PrimaryKeyRelatedField(
-        queryset=Sponsor.objects.all(),
-        required=False,
-        allow_null=True,
-        help_text="Sponsor linked to the student profile."
-    )
     user_id = serializers.CharField(source='user.id', read_only=True)
     user_details = serializers.SerializerMethodField(
         help_text="Details of the user as a JSON string."
@@ -455,7 +435,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         if sponsor:
             data = SponsorProfileSerializer(sponsor).data
             # Remove or exclude fields as needed, for example:
-            data.pop('user_details', None)  # Exclude 'profile_picture' field
+            sponsor_details = data.pop('user_details', None)
+            data['user_details'] = json.loads(sponsor_details)
             return json.dumps(data)
         return None
 
@@ -463,10 +444,9 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         model = Student
         fields = ['user_id', 'user', 'user_details', 'gender', 'phone_number', 'nationality',
                   'current_school', 'current_grade', 'location', 'profile_picture_media',
-                  'profile_picture', 'linked_sponsor', 'linked_sponsor_details', 'date_of_birth']
+                  'profile_picture', 'linked_sponsor_details', 'date_of_birth']
         read_only_fields = ['user_id', 'user', 'user_details', 'profile_picture']
         extra_kwargs = {
-            'linked_sponsor': {'required': False, 'allow_null': True},
             'user_details': {'read_only': True},
             'profile_picture_media': {'required': False, 'allow_null': True, 'write_only': True},
         }
@@ -493,13 +473,29 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
 
 class CertificationSerializer(serializers.ModelSerializer):
-    instructor = serializers.PrimaryKeyRelatedField(
+    instructor = serializers.UUIDField(
+        source='instructor.user_id',
         read_only=True,
+        help_text="ID of the instructor."
     )
 
     class Meta:
         model = Certification
         fields = ['id', 'name', 'issuer', 'instructor', 'date_awarded', 'expires_at']
+
+    def validate(self, attrs):
+        if not self.instance:
+            if not attrs.get('date_awarded'):
+                attrs['date_awarded'] = timezone.now()
+            if attrs.get('expires_at') and attrs['expires_at'] < attrs['date_awarded']:
+                raise serializers.ValidationError("Expiration date cannot be before award date.")
+            name = attrs.get('name')
+            issuer = attrs.get('issuer')
+            if Certification.objects.filter(name=name, issuer=issuer).exists():
+                raise serializers.ValidationError("Certification with this name and issuer already exists.")
+        if attrs.get('expires_at') and attrs['expires_at'] < timezone.now():
+            raise serializers.ValidationError("Expiration date cannot be in the past.")
+        return attrs
 
 
 class InstructorProfileSerializer(serializers.ModelSerializer):

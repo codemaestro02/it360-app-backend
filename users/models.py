@@ -81,7 +81,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        help_text="Unique identifier for the user."
+        help_text="Unique identifier for the user.",
+        max_length=255
     )
     email = models.EmailField(unique=True)
     use_email_as_user_ID = models.BooleanField(default=False, help_text="Use email as username for login.")

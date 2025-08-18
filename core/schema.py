@@ -4,4 +4,4 @@ class ViewSetTagSchema(AutoSchema):
     def get_tags(self):
         if hasattr(self.view, 'tag_name'):
             return [self.view.tag_name]
-        return [self.view.__class__.__name__]
+        return super().get_tags()
