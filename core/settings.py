@@ -12,8 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
 
-from django.conf.global_settings import EMAIL_USE_SSL
 from dotenv import load_dotenv
 from datetime import timedelta
 
@@ -35,7 +35,6 @@ DEBUG = os.getenv('DEBUG') if os.getenv('DEBUG') == 'True' else False
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS').split(',') if os.getenv('DJANGO_ALLOWED_HOSTS') else []
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -45,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -91,14 +92,15 @@ DATABASES = {
     #     'ENGINE': 'django.db.backends.sqlite3',
     #     'NAME': BASE_DIR / 'db.sqlite3',
     # }
-    'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'it360_db'),
-        'USER': os.getenv('DB_USER', 'it360_admin'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
-        'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
-        'PORT': os.getenv('DB_PORT', '5432'),
-    }
+    # 'default': {
+    #     'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+    #     'NAME': os.getenv('DB_NAME', 'it360_db'),
+    #     'USER': os.getenv('DB_USER', 'it360_admin'),
+    #     'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
+    #     'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
+    #     'PORT': os.getenv('DB_PORT', '5432'),
+    # }
+    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
 }
 
 
@@ -140,7 +142,8 @@ LOGIN_URL = '/auth/login/'
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

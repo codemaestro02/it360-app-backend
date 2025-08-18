@@ -83,7 +83,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Passwords do not match.")
         if 'role' in attrs and attrs['role'] not in dict(User.ROLE_CHOICES).keys():
             raise serializers.ValidationError(f"Invalid role. Choose from {', '.join(dict(User.ROLE_CHOICES).keys())}.")
-        # Prevent updating use_email_as_username for existing users
         return attrs
 
     def create(self, validated_data):
@@ -390,7 +389,7 @@ class SponsorLinkStudentSerializer(serializers.Serializer):
     )
     email = serializers.EmailField(
         help_text="Email address of the student.",
-        required=False,
+        required=False
     )
 
     def validate_student_id(self, value):
