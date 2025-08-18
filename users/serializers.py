@@ -59,12 +59,11 @@ class RegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'password', 'password2', 'first_name', 'last_name',
-            'role', 'use_email_as_user_ID'
+            'role'
         ]
         extra_kwargs = {
             'password': {'write_only': True, 'required': True},
             'password2': {'write_only': True, 'required': True},
-            'use_email_as_user_ID': {'required': False, 'write_only': True},
         }
         read_only_fields = ['id',]
 
@@ -84,9 +83,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Passwords do not match.")
         if 'role' in attrs and attrs['role'] not in dict(User.ROLE_CHOICES).keys():
             raise serializers.ValidationError(f"Invalid role. Choose from {', '.join(dict(User.ROLE_CHOICES).keys())}.")
-        # Prevent updating use_email_as_username for existing users
-        if self.instance and 'use_email_as_user_ID' in attrs:
-            raise serializers.ValidationError("use_email_as_user_ID cannot be updated after registration.")
         return attrs
 
     def create(self, validated_data):
@@ -388,7 +384,12 @@ class SponsorProfileSerializer(serializers.ModelSerializer):
 
 class SponsorLinkStudentSerializer(serializers.Serializer):
     student_id = serializers.UUIDField(
-        help_text="ID of the student to link to the sponsor."
+        help_text="ID of the student to link to the sponsor.",
+        required=False
+    )
+    email = serializers.EmailField(
+        help_text="Email address of the student.",
+        required=False
     )
 
     def validate_student_id(self, value):
@@ -398,9 +399,31 @@ class SponsorLinkStudentSerializer(serializers.Serializer):
             raise serializers.ValidationError("Student with this ID does not exist.")
         return value
 
+    def validate_email(self, value):
+        try:
+            Student.objects.get(user__email=value)
+        except Student.DoesNotExist:
+            raise serializers.ValidationError("Student with this email already exists.")
+        return value
+
+    def validate(self, attrs):
+        student_id = attrs.get('student_id')
+        email = attrs.get('email')
+        if not student_id and not email:
+            raise serializers.ValidationError("Either student_id or email is required.")
+        if student_id and email:
+            raise serializers.ValidationError("Only one of student_id or email is allowed.")
+        return attrs
+
     def save(self, sponsor):
         student_id = self.validated_data['student_id']
-        student = Student.objects.get(user_id=student_id)
+        email = self.validated_data['email']
+        if email:
+            student = Student.objects.get(user__email=email)
+        elif student_id:
+            student = Student.objects.get(user_id=student_id)
+        else:
+            raise serializers.ValidationError("Either student_id or email is required.")
         student.linked_sponsor = sponsor
         student.save()
         return student

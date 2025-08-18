@@ -85,7 +85,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=255
     )
     email = models.EmailField(unique=True)
-    use_email_as_user_ID = models.BooleanField(default=False, help_text="Use email as username for login.")
     first_name = models.CharField(max_length=50, blank=True, null=True, help_text="First name of the user.")
     last_name = models.CharField(max_length=50, blank=True, null=True, help_text="Last name of the user.")
     role = models.CharField(
@@ -119,12 +118,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         :return: Full name as a string.
         """
         return f"{self.first_name} {self.last_name}".strip()
-
-    def save(self, *args, **kwargs):
-        if not self.pk:
-            if self.use_email_as_user_ID:
-                self.id = self.email
-        super().save(*args, **kwargs)
 
 
 class OTP(models.Model):
