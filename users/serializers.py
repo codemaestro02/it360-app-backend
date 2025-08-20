@@ -200,7 +200,10 @@ class LoginSerializer(serializers.Serializer):
 
         user = authenticate(email=email, password=password)
         if not user:
-            user = User.objects.filter(email=email).first()
+            if User.objects.filter(email=email).exists():
+                # If user exists but authentication failed, it might be due to wrong password
+                raise serializers.ValidationError("Incorrect password.")
+            raise serializers.ValidationError("Invalid credentials.")
 
         if not user:
             raise serializers.ValidationError("Invalid credentials.")
