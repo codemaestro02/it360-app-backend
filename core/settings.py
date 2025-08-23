@@ -138,6 +138,9 @@ AUTH_USER_MODEL = 'users.User'
 
 LOGIN_URL = '/auth/login/'
 
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
