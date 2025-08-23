@@ -605,5 +605,5 @@ class ChangePasswordViewSet(viewsets.GenericViewSet):
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        serializer.save(user=request.user)
+        serializer.save()
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
