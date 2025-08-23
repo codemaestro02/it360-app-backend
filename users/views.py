@@ -368,8 +368,8 @@ class RegisterViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
             # For example, you can return a token or user data
             return Response({
                 'message': 'Registration successful, Check your email for OTP verification',
-                'user': RegistrationSerializer(user).data,
-                'jwt_token': get_tokens_for_user(user)  # Assuming get_tokens_for_user is defined in a User model
+                'user': RegistrationSerializer(user).data
+                # 'jwt_token': get_tokens_for_user(user)  # Assuming get_tokens_for_user is defined in a User model
             }, status=status.HTTP_201_CREATED)
         except ValidationError as e:
             return Response({
@@ -379,6 +379,7 @@ class RegisterViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         except Exception as e:
             return Response({
                 'message': 'Server Failure',
+                'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

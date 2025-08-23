@@ -89,7 +89,10 @@ class RegistrationSerializer(serializers.ModelSerializer):
         validated_data.pop('password2')
         password = validated_data.pop('password')
         role = validated_data.get('role', 'temp_user')
+        # Ensure the password (and role) are passed into create_user so it hashes properly
         user = User.objects.create_user(
+            password=password,
+            role=role,
             **validated_data
         )
         try:
@@ -205,8 +208,8 @@ class LoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Incorrect password.")
             raise serializers.ValidationError("Invalid credentials.")
 
-        if not user:
-            raise serializers.ValidationError("Invalid credentials.")
+        # if not user:
+        #     raise serializers.ValidationError("Invalid credentials.")
 
         if not user.is_verified:
             raise serializers.ValidationError("Account not verified.")
