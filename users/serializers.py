@@ -235,20 +235,24 @@ class LoginSerializer(serializers.Serializer):
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
 
-    def __init__(self, instance=None, data=empty, **kwargs):
-        super().__init__(instance, data, **kwargs)
-        self.token = None
-
     def validate(self, attrs):
-        self.token = attrs['refresh']
+        refresh = attrs.get('refresh')
+        if not refresh:
+            raise serializers.ValidationError({"refresh": "This field is required."})
+        try:
+            attrs['token'] = RefreshToken(refresh)
+        except TokenError:
+            raise serializers.ValidationError({"refresh": "Token is invalid or expired."})
         return attrs
 
     def save(self, **kwargs):
+        token = self.validated_data['token']
         try:
-            token = RefreshToken(self.token)
             token.blacklist()
-        except TokenError:
-            raise serializers.ValidationError("Token is invalid or expired.")
+        except (AttributeError, NotImplementedError):
+            # Blacklisting not enabled; treat as no-op
+            pass
+        return {"detail": "Successfully logged out."}
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
