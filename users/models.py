@@ -16,6 +16,8 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("Users must have an email address")
         email = self.normalize_email(email)
+        # Ensure 'role' isn't duplicated between explicit arg and extra_fields
+        role = extra_fields.pop("role", role)
         if role == "instructor":
             extra_fields.setdefault("is_staff", True)
         elif role == "admin":

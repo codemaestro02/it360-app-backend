@@ -88,7 +88,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
-        role = validated_data.get('role', 'temp_user')
+        # Pop role so it doesn't remain in validated_data (avoids duplicate kwargs)
+        role = validated_data.pop('role', 'temp_user')
         # Ensure the password (and role) are passed into create_user so it hashes properly
         user = User.objects.create_user(
             password=password,
