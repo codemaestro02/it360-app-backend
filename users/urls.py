@@ -35,6 +35,9 @@ router.register(r'user/forgot-password', views.ForgotPasswordViewSet, basename='
 router.register(r'user/reset-password', views.ResetPasswordViewSet, basename='reset-password')
 router.register(r'user', views.ChangePasswordViewSet, basename='change-password')
 router.register(r'user', views.UserAccountDeleteViewSet, basename='delete-account')
+router.register(r'user', views.ToggleUserStatusViewSet, basename='toggle-user-status')
+router.register(r'user/create-admin', views.AdminCreateModelViewset, basename='create-admin')
+router.register(r'users', views.UsersViewSet, basename='users')
 
 urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

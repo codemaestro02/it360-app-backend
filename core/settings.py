@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'users',
+    'courses',
 ]
 
 MIDDLEWARE = [
@@ -92,15 +93,15 @@ DATABASES = {
     #     'ENGINE': 'django.db.backends.sqlite3',
     #     'NAME': BASE_DIR / 'db.sqlite3',
     # }
-    # 'default': {
-    #     'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-    #     'NAME': os.getenv('DB_NAME', 'it360_db'),
-    #     'USER': os.getenv('DB_USER', 'it360_admin'),
-    #     'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
-    #     'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
-    #     'PORT': os.getenv('DB_PORT', '5432'),
-    # }
-    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'it360_db'),
+        'USER': os.getenv('DB_USER', 'it360_admin'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'it360_password'),
+        'HOST': os.getenv('DB_HOST', 'db'),  # Uses 'db' by default
+        'PORT': os.getenv('DB_PORT', '5432'),
+    }
+    # 'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
 }
 
 
@@ -168,6 +169,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_SCHEMA_CLASS': 'core.schema.ViewSetTagSchema',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',

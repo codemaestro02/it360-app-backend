@@ -2,7 +2,8 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
-from rest_framework import viewsets, mixins, status, permissions, pagination
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, mixins, status, permissions, pagination, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
@@ -10,14 +11,16 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, extend_schema_view
+
 from .serializers import (
     RegistrationSerializer, VerifyOTPSerializer, LoginSerializer,
     LogoutSerializer, ForgotPasswordSerializer, ResetPasswordSerializer,
-    ChangePasswordSerializer, UserSerializer
+    ChangePasswordSerializer, UserSerializer, AdminCreateSerializer
 )
 
 # for Admin
-from .models import Admin
+from .models import Admin, User
 from .serializers import (AdminProfileSerializer)
 
 # for students
@@ -187,6 +190,17 @@ class SponsorLinkStudentViewSet(viewsets.GenericViewSet):
             return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name='instructor_pk',
+            type={'format': 'uuid', 'type': 'string'},
+            location=OpenApiParameter.PATH,
+            required=True,
+            description='UUID of the instructor'
+        )
+    ]
+)
 class CertificationViewSet(viewsets.ModelViewSet):
     """
     Used to create certifications for instructors
@@ -307,21 +321,6 @@ class UserAccountDeleteViewSet(viewsets.GenericViewSet):
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.filter(id=self.request.user.id)
 
-    # @swagger_auto_schema(
-    #     operation_summary='Delete Account',
-    #     operation_description='Allows current user to delete their account.',
-    #     responses={
-    #         200: openapi.Response(
-    #             'Success',
-    #             openapi.Schema(type=openapi.TYPE_STRING, description='Account deleted successfully')
-    #         ),
-    #         400: openapi.Response('Bad request'),
-    #         401: openapi.Response(
-    #             'Unauthorized',
-    #             openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')
-    #         ),
-    #     }
-    # )
     @action(methods=['delete'], detail=False, url_path='delete-account')
     def delete_account(self, request, *args, **kwargs):
         """
@@ -345,12 +344,6 @@ class RegisterViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = RegistrationSerializer
     permission_classes = []  # No authentication required for registration
 
-    # @swagger_auto_schema(
-    #     responses={
-    #         201: openapi.Response('Success', RegistrationLoginResponseSerializer),
-    #         400: openapi.Response('Bad request'),
-    #     }
-    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a new user profile.
@@ -399,12 +392,6 @@ class LoginViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         """
         serializer.save()
 
-    # @swagger_auto_schema(
-    #     responses={
-    #         200: openapi.Response('Success', RegistrationLoginResponseSerializer),
-    #         400: openapi.Response('Bad request'),
-    #     }
-    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a user login session.
@@ -435,15 +422,6 @@ class LogoutViewSet(viewsets.GenericViewSet):
     serializer_class = LogoutSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    # @swagger_auto_schema(
-    #     operation_summary='Logout User',
-    #     operation_description='Logs out the user by invalidating their session or tokens.',
-    #     methods=['post'],
-    #     responses={
-    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Logout successful')),
-    #         401: openapi.Response('Unauthorized', openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')),
-    #     }
-    # )
     @action(detail=False, methods=['post'], url_path='logout')
     def logout(self, request):
         """
@@ -474,15 +452,6 @@ class VerifyOTPViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = VerifyOTPSerializer
     permission_classes = []  # No authentication required for OTP verification
 
-    # @swagger_auto_schema(
-    #     operation_summary='Verify OTP',
-    #     operation_description='Allows users to verify their OTPs for registration or other purposes.',
-    #     request_body=VerifyOTPSerializer,
-    #     responses={
-    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='OTP verified successfully')),
-    #         400: openapi.Response('Bad request'),
-    #     }
-    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of an OTP verification request.
@@ -506,14 +475,6 @@ class ForgotPasswordViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = ForgotPasswordSerializer
     permission_classes = []  # No authentication required for forgot password
 
-    # @swagger_auto_schema(
-    #     operation_summary='Forgot Password',
-    #     operation_description='Allows users to request a password reset by providing their email.',
-    #     responses={
-    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset email sent')),
-    #         400: openapi.Response('Bad request'),
-    #     }
-    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a forgot password request.
@@ -537,15 +498,6 @@ class ResetPasswordViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = ResetPasswordSerializer
     permission_classes = []  # No authentication required for reset password
 
-    # @swagger_auto_schema(
-    #     operation_summary='Reset Password',
-    #     operation_description='After using Forgot Password, this allows users to reset their password using a valid OTP.',
-    #     request_body=ResetPasswordSerializer,
-    #     responses={
-    #         200: openapi.Response('Success', openapi.Schema(type=openapi.TYPE_STRING, description='Password reset successful')),
-    #         400: openapi.Response('Bad request'),
-    #     }
-    # )
     def create(self, request, *args, **kwargs):
         """
         Handle the creation of a password reset request.
@@ -578,21 +530,6 @@ class ChangePasswordViewSet(viewsets.GenericViewSet):
         user = get_user_model()
         return user.objects.filter(id=self.request.user.id)
 
-    # @swagger_auto_schema(
-    #     operation_summary='Change Password',
-    #     operation_description='Allows authenticated users to change their password.',
-    #     responses={
-    #         200: openapi.Response(
-    #             'Success',
-    #             openapi.Schema(type=openapi.TYPE_STRING, description='Password changed successfully')
-    #         ),
-    #         400: openapi.Response('Bad request'),
-    #         401: openapi.Response(
-    #             'Unauthorized',
-    #             openapi.Schema(type=openapi.TYPE_STRING, description='User not authenticated')
-    #         ),
-    #     }
-    # )
     @action(detail=False, methods=['post'], url_path='change-password')
     def change_password(self, request):
         """
@@ -607,3 +544,238 @@ class ChangePasswordViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+
+
+class AdminCreateModelViewset(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """
+    View for handling Admin registration.
+    This view allows new users to register by creating a new user profile.
+    """
+    tag_name = 'Create Admin'
+    serializer_class = AdminCreateSerializer
+    permission_classes = [app_permissions.IsAdmin]
+
+    def create(self, request, *args, **kwargs):
+        """
+        Handle the creation of a new user profile.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
+
+            # Generate tokens or perform any additional registration logic here -
+            # For example, you can return a token or user data
+            return Response({
+                'message': 'Registration successful, Check the email for OTP verification',
+                'user': AdminCreateSerializer(user).data
+                # 'jwt_token': get_tokens_for_user(user)  # Assuming get_tokens_for_user is defined in a User model
+            }, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({
+                'message': 'Registration failed',
+                'errors': e.detail
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'message': 'Server Failure',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ToggleUserStatusViewSet(viewsets.GenericViewSet):
+    """
+        A viewset to deactivate or reactivate users
+    """
+    tag_name = 'User Status'
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [app_permissions.IsAdmin]
+
+    @action(detail=True, methods=['post'], url_path='toggle-user-status')
+    def toggle_user_status(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_active = not instance.is_active
+        instance.save()
+
+
+    @action(detail=True, methods=['get'], url_path='get-active-status')
+    def get_active_status(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return Response({
+            "status": "Active" if instance.is_active else "Inactive",
+        }, status=status.HTTP_200_OK)
+
+
+class UsersViewSet(viewsets.GenericViewSet):
+    """
+    A viewset for list and retrieving Users
+    """
+    tag_name = 'User List and Detail'
+    serializer_class = UserSerializer
+    queryset = User.objects.all()
+    permission_classes = []
+    filterset_fields = ['is_active', 'role']
+    search_fields = ['first_name', 'last_name', 'email']
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    pagination_class = pagination.PageNumberPagination
+
+    def get_queryset(self):
+        return User.objects.all()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='role',
+                type=str,
+                enum=['student', 'sponsor', 'instructor', 'admin'],
+                location=OpenApiParameter.QUERY,
+                description='User role',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='is_active',
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description='User Status',
+                required=False,
+            ),
+        ]
+    )
+    @action(methods=['get'], detail=False, url_path='get-all-users')
+    def list_users(self, request, *args, **kwargs):
+        role = request.query_params.get('role')
+        instances = self.get_queryset()
+        user_status = request.query_params.get('is_active') == 'true' if request.query_params.get('is_active') else None
+        if user_status is not None:
+            instances = instances.filter(is_active=user_status)
+        else:
+            instances = instances
+        if role:
+            instances = instances.filter(role=role)
+        else:
+            instances = instances
+        page = self.paginate_queryset(instances)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return Response({
+                'page': self.paginator.page.number if hasattr(
+                    self, 'paginator') and hasattr(self.paginator, 'page') else 1,
+                'records': len(serializer.data),
+                'total': self.paginator.page.paginator.count if hasattr(
+                    self, 'paginator') and hasattr(self.paginator, 'page') else len(instances),
+                'rows': serializer.data
+            })
+        serializer = self.get_serializer(instances, many=True)
+        return Response({
+            'page': 1,
+            'records': len(serializer.data),
+            'total': len(instances),
+            'rows': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='role',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                enum=['student', 'sponsor', 'instructor', 'admin'],
+                description='User role',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='is_active',
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description='User Status',
+                required=False,
+            ),
+        ]
+    )
+    @action(methods=['get'], detail=False, url_path='get-all-profiles-by-role')
+    def get_profiles_by_role(self, request, *args, **kwargs):
+        role = request.query_params.get('role')
+
+        if role is None:
+            raise ValidationError("Role is required.")
+        try:
+            user_class = {
+                'student': Student,
+                'sponsor': Sponsor,
+                'instructor': Instructor,
+                'admin': Admin
+            }.get(role)
+            user_serializer = {
+                'student': StudentProfileSerializer,
+                'sponsor': SponsorProfileSerializer,
+                'instructor': InstructorProfileSerializer,
+                'admin': AdminProfileSerializer
+            }.get(role)
+            if user_class:
+                filter_kwargs = {'user__role': role}
+                if request.query_params.get('is_active') is not None:
+                    filter_kwargs['user__is_active'] = request.query_params.get('is_active').lower() == 'true'
+                instances = user_class.objects.filter(**filter_kwargs)
+                instance_serializer = user_serializer(instances, many=True)
+            else:
+                raise ValidationError(f"Invalid role: {role}.")
+
+            page = self.paginate_queryset(instances)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return Response({
+                    'page': self.paginator.page.number if hasattr(
+                        self, 'paginator') and hasattr(self.paginator, 'page') else 1,
+                    'records': len(serializer.data),
+                    'total': self.paginator.page.paginator.count if hasattr(
+                        self, 'paginator') and hasattr(self.paginator, 'page') else len(instances),
+                    'rows': serializer.data
+                })
+            return Response({
+                'page': 1,
+                'records': len(instance_serializer.data),
+                'total': len(instances),
+                'rows': instance_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=['get'], detail=True, url_path='get-one-user')
+    def get_one_user(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            user_class = {
+                'student': Student,
+                'sponsor': Sponsor,
+                'instructor': Instructor,
+                'admin': Admin
+            }.get(instance.role)
+            user_serializer = {
+                'student': StudentProfileSerializer,
+                'sponsor': SponsorProfileSerializer,
+                'instructor': InstructorProfileSerializer,
+                'admin': AdminProfileSerializer
+            }.get(instance.role)
+            if user_class:
+                result = user_class.objects.filter(user__id=instance.id)
+                print(result)
+
+                if result.count() > 1:
+                    raise ValidationError({'detail': 'Multiple users found.'})
+                if result.exists():
+                    instance_serializer = user_serializer(result.first())
+                else:
+                    raise ValidationError({'detail': 'User profile not found.'})
+            else:
+                raise ValidationError({'detail': f'Invalid role: {instance.role}.'})
+            return Response(instance_serializer.data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            return Response({'errors': e.detail if hasattr(e, 'detail') else str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

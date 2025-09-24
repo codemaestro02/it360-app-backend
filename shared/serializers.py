@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from users.models import User
+from users.serializers import UserSerializer
+
 from .models import GenericBaseModel
 
 
@@ -13,40 +15,20 @@ class GenericBaseModelSerializer(serializers.ModelSerializer):
     updated_at = serializers.DateTimeField(read_only=True)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     updated_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    created_by_details = UserSerializer(read_only=True, source='created_by')
+    updated_by_details = UserSerializer(read_only=True, source='updated_by')
+    deleted_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    deleted_at = serializers.DateTimeField(read_only=True)
+    deleted_by_details = UserSerializer(read_only=True, source='deleted_by')
+    is_hidden = serializers.BooleanField(
+        required=False, allow_null=True, default=False
+    )
+
 
     class Meta:
-        model = GenericBaseModel
-        fields = '__all__'
-
-    def to_internal_value(self, data):
-        """
-        Override to_internal_value to handle created_by and updated_by fields.
-        These fields are set automatically based on the request user.
-        """
-        if 'created_by' in data:
-            data.pop('created_by')
-        if 'updated_by' in data:
-            data.pop('updated_by')
-        if self.context and 'request' in self.context:
-            request = self.context['request']
-            if request and getattr(request.user, 'is_authenticated', False):
-                data['created_by'] = request.user.id
-        return super().to_internal_value(data)
-
-    def create(self, validated_data):
-        """
-        Override the create method to set created_by fields.
-        """
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            validated_data['created_by'] = request.user
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        """
-        Override the update method to set updated_by fields.
-        """
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            validated_data['updated_by'] = request.user
-        return super().update(instance, validated_data)
+        fields = [
+            'created_at', 'created_by', 'created_by_details',
+            'updated_at', 'updated_by', 'updated_by_details',
+            'deleted_at', 'deleted_by', 'deleted_by_details',
+            'is_hidden'
+        ]

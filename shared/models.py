@@ -12,7 +12,12 @@ class GenericBaseModel(models.Model):
     created_by = models.ForeignKey(
         'users.User', on_delete=models.SET_NULL, null=True, related_name='%(class)s_created'
     )
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+    is_hidden = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, related_name='%(class)s_deleted'
+    )
     updated_by = models.ForeignKey(
         'users.User', on_delete=models.SET_NULL, null=True, related_name='%(class)s_updated'
     )

@@ -177,6 +177,7 @@ class Student(models.Model):
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the student.")
     current_school = models.CharField(max_length=100, blank=True, null=True, help_text="Current school of the student.")
     current_grade = models.CharField(max_length=50, blank=True, null=True, help_text="Current grade of the student.")
+    date_joined = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
@@ -202,6 +203,9 @@ class Sponsor(models.Model):
     phone_number = models.CharField(max_length=15, blank=True, null=True, help_text="Phone number of the sponsor.")
     address = models.TextField(blank=True, null=True, help_text="Address of the sponsor.")
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the sponsor.")
+    date_joined = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    country = models.CharField(max_length=50, blank=True, null=True, help_text="Country of the instructor.")
+    location = models.CharField(max_length=100, blank=True, null=True, help_text="Location of the instructor.")
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"
@@ -227,6 +231,9 @@ class Instructor(models.Model):
     phone_number = models.CharField(max_length=15, blank=True, null=True, help_text="Phone number of the instructor.")
     address = models.TextField(blank=True, null=True, help_text="Address of the instructor.")
     bio = models.TextField(blank=True, null=True, help_text="Short biography of the instructor.")
+    date_joined = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    country = models.CharField(max_length=50, blank=True, null=True, help_text="Country of the instructor.")
+    location = models.CharField(max_length=100, blank=True, null=True, help_text="Location of the instructor.")
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the instructor.")
 
     def __str__(self):
@@ -270,6 +277,9 @@ class Admin(models.Model):
     phone_number = models.CharField(max_length=15, blank=True, null=True, help_text="Phone number of the admin.")
     address = models.TextField(blank=True, null=True, help_text="Address of the admin.")
     profile_picture = models.TextField(blank=True, null=True, help_text="Profile picture of the admin.")
+    date_joined = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    country = models.CharField(max_length=50, blank=True, null=True, help_text="Country of the instructor.")
+    location = models.CharField(max_length=100, blank=True, null=True, help_text="Location of the instructor.")
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name} ({self.user.id})"

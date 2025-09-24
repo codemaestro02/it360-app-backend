@@ -48,7 +48,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
-    role = serializers.ChoiceField(choices=User.ROLE_CHOICES, required=False)
+    VALID_ROLES = [
+        ("student", "Student"),
+        ("instructor", "Instructor"),
+        ("sponsor", "Sponsor"),
+    ]
+    role = serializers.ChoiceField(choices=VALID_ROLES, required=False)
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True)
     last_name = serializers.CharField(required=True)
@@ -81,8 +86,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
         if 'password' in attrs and 'password2' in attrs:
             if attrs['password'] != attrs['password2']:
                 raise serializers.ValidationError("Passwords do not match.")
-        if 'role' in attrs and attrs['role'] not in dict(User.ROLE_CHOICES).keys():
-            raise serializers.ValidationError(f"Invalid role. Choose from {', '.join(dict(User.ROLE_CHOICES).keys())}.")
+        if 'role' in attrs and attrs['role'] not in dict(self.VALID_ROLES).keys():
+            raise serializers.ValidationError(f"Invalid role. Choose from {', '.join(dict(self.VALID_ROLES).keys())}.")
         return attrs
 
     def create(self, validated_data):
@@ -100,7 +105,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
             user_class = {
                 'student': Student,
                 'sponsor': Sponsor,
-                'admin': Admin,
                 'instructor': Instructor
             }.get(role)
             if user_class:
@@ -124,18 +128,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
         except Exception as e:
             user.delete()
             raise serializers.ValidationError(f"Error creating user profile: {str(e)}")
-
-
-class RegistrationLoginResponseSerializer(serializers.Serializer):
-    message = serializers.CharField()
-    user = UserSerializer()
-    jwt_token = serializers.DictField(
-        default={
-            'access': 'access_token_placeholder',
-            'refresh': 'refresh_token_placeholder',
-            'expires_in': 3600  # Default to 1 hour
-        }
-    )
 
 
 class VerifyOTPSerializer(serializers.Serializer):
@@ -332,14 +324,6 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data['new_password'])
         user.save()
 
-
-# class UpdateUserProfileSerializer(serializers.ModelSerializer):
-#     user_id = serializers.PrimaryKeyRelatedField(
-#         queryset=User.objects.all(),
-#         required=True,
-#         help_text="User ID to update the profile."
-#     )
-#
 
 class SponsorProfileSerializer(serializers.ModelSerializer):
     profile_picture_media = serializers.ImageField(
@@ -663,3 +647,100 @@ class AdminProfileSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+class AdminCreateSerializer(serializers.ModelSerializer):
+    VALID_GENDERS = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other')
+    ]
+    profile_picture_media = serializers.ImageField(
+        allow_null=True,
+        required=False,
+        write_only=True,
+        help_text="Upload an image file."
+    )
+    profile_picture = serializers.CharField(read_only=True)
+    gender = serializers.ChoiceField(choices=VALID_GENDERS, required=False)
+    email = serializers.EmailField(required=True)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    password2 = serializers.CharField(write_only=True, required=True)
+    id = serializers.CharField(read_only=True)
+    role = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'password', 'password2', 'first_name', 'last_name',
+            'role', 'profile_picture_media', 'profile_picture', 'gender'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': True},
+            'password2': {'write_only': True, 'required': True},
+        }
+        read_only_fields = ['id',]
+
+    def validate_image(self, value):
+        if value and not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise serializers.ValidationError("Unsupported file format. Only PNG, JPG, and JPEG are allowed.")
+        return value
+
+    def validate(self, attrs):
+        if 'email' in attrs:
+            attrs['email'] = validate_email(attrs['email'])
+        if 'profile_picture_media' in attrs:
+            media = self.validate_image(attrs.get('profile_picture_media'))
+            attrs['profile_picture'] = convert_to_base64(media, max_size=10 * 1024 * 1024)  # 10 MB max size
+        if 'gender' in attrs and attrs['gender'] not in dict(self.VALID_GENDERS).keys():
+            raise serializers.ValidationError("Gender is invalid.")
+        if 'password' in attrs:
+            attrs['password'] = validate_password_length(attrs['password'])
+        if 'password2' in attrs:
+            attrs['password2'] = validate_password_length(attrs['password2'])
+        if 'password2' in attrs and 'password' not in attrs:
+            raise serializers.ValidationError("Password2 is provided but password is missing.")
+        if 'password' not in attrs and 'password2' not in attrs:
+            raise serializers.ValidationError("Password is required.")
+        if 'password' in attrs and 'password2' in attrs:
+            if attrs['password'] != attrs['password2']:
+                raise serializers.ValidationError("Passwords do not match.")
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password2')
+        password = validated_data.pop('password')
+        role = 'admin'
+        gender = validated_data.get('gender', None)
+        profile_pic = validated_data['profile_picture']
+        # Ensure the password (and role) are passed into create_user so it hashes properly
+
+        user = User.objects.create_user(
+            password=password,
+            role=role,
+            **validated_data
+        )
+        try:
+            Admin.objects.create(
+                user=user,
+                profile_picture=profile_pic,
+                gender=gender
+            )
+            code = "12345" if os.getenv('OTP_NOT_IN_PROD', 'True').lower() == "true" else f"{random.randint(10000, 99999)}"
+            otp_token_lifetime = int(os.getenv('OTP_LIFETIME', 600))  # Default to 10 minutes if not set
+            expiry = timezone.now() + timedelta(seconds=otp_token_lifetime)
+
+            OTP.objects.update_or_create(
+                email=user.email,
+                code=code,
+                purpose='register',
+                expires_at=expiry
+            )
+
+            # TODO: send email with OTP
+            send_otp_email(user.email, code, 'register')
+            return user
+        except Exception as e:
+            user.delete()
+            raise serializers.ValidationError(f"Error creating user profile: {str(e)}")
